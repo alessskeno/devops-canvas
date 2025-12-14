@@ -1,0 +1,54 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer theme {
+    :root {
+        --color-primary: #3B82F6;
+        --color-primary-hover: #2563EB;
+        --color-secondary: #8B5CF6;
+        --color-bg: #F9FAFB;
+        --color-bg-dark: #1F2937;
+        --font-sans: 'Inter', system-ui, sans-serif;
+    }
+}
+
+@layer base {
+    body {
+        @apply text-slate-950 bg-slate-100 antialiased;
+        font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    }
+
+    .dark body {
+        @apply text-slate-200 bg-slate-950;
+    }
+}
+
+@layer utilities {
+    .grid-bg {
+        background-size: 20px 20px;
+        background-image: radial-gradient(circle, #E2E8F0 1px, transparent 1px);
+    }
+
+    .dark .grid-bg {
+        background-image: radial-gradient(circle, #334155 1px, transparent 1px);
+    }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    @apply bg-slate-400 rounded hover:bg-slate-500;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+    @apply bg-slate-800 hover:bg-slate-700;
+}
