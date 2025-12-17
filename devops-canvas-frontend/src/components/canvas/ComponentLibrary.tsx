@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Search, Database, Box, Layers, Archive, MessageSquare, BarChart2, Star, Activity } from 'lucide-react';
+import { Search, Database, Box, Layers, Archive, MessageSquare, BarChart2, Star, Activity, FileText, Bell } from 'lucide-react';
+import { HighlightedText } from '../shared/HighlightedText';
 import { COMPONENT_REGISTRY } from '../../utils/componentRegistry';
 import { ComponentDefinition } from '../../types';
 
@@ -12,7 +13,10 @@ export function ComponentLibrary() {
         { id: 'infrastructure', label: 'Infra' },
         { id: 'database', label: 'DB' },
         { id: 'caching', label: 'Cache' },
+
         { id: 'messaging', label: 'Queue' },
+        { id: 'monitoring', label: 'Monitoring' },
+        { id: 'configuration', label: 'Config' },
     ];
 
     const filteredComponents = COMPONENT_REGISTRY.filter(c => {
@@ -77,12 +81,14 @@ export function ComponentLibrary() {
                             {component.icon === 'Layers' && <Layers size={20} />}
                             {component.icon === 'Activity' && <Activity size={20} />}
                             {component.icon === 'BarChart' && <BarChart2 size={20} />}
+                            {component.icon === 'FileText' && <FileText size={20} />}
+                            {component.icon === 'Bell' && <Bell size={20} />}
                         </div>
 
                         {/* Text Content */}
                         <div className="flex flex-col flex-1 min-w-0">
                             <span className="font-semibold text-gray-900 dark:text-gray-100 text-sm truncate">
-                                {component.name}
+                                <HighlightedText text={component.name} highlight={filter} />
                             </span>
                             <span className="text-xs text-gray-500 dark:text-gray-400 truncate">
                                 {component.description}

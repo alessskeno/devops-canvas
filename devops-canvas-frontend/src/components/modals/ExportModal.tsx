@@ -4,6 +4,8 @@ import { Button } from '../shared/Button';
 import { Toggle } from '../shared/Toggle';
 import { Copy, Download, Share2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useCanvasStore } from '../../store/canvasStore';
+import { generateConfig } from '../../utils/exportConfig';
 
 interface ExportModalProps {
     isOpen: boolean;
@@ -12,21 +14,12 @@ interface ExportModalProps {
 
 export function ExportModal({ isOpen, onClose }: ExportModalProps) {
     const [format, setFormat] = useState<'yaml' | 'json'>('yaml');
-    const [includeSecrets, setIncludeSecrets] = useState(false);
+    const [excludeSecrets, setExcludeSecrets] = useState(false);
 
-    const mockConfig = format === 'yaml'
-        ? `version: '1.2'
-services:
-  postgres:
-    image: postgres:15
-    ports: ["5432:5432"]
-    environment:
-      POSTGRES_DB: app_prod
-      POSTGRES_USER: postgres
-  redis:
-    image: redis:7
-    ports: ["6379:6379"]`
-        : `{\n  "version": "1.2",\n  "services": {\n    "postgres": {\n      "image": "postgres:15",\n      "ports": ["5432:5432"]\n    }\n  }\n}`;
+    const nodes = useCanvasStore((state) => state.nodes);
+    const connections = useCanvasStore((state) => state.connections);
+
+    const configContent = generateConfig(nodes, connections, format, excludeSecrets);
 
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Export Configuration" size="lg">
@@ -44,18 +37,18 @@ services:
                     </div>
 
                     <Toggle
-                        label="Include Secrets"
-                        checked={includeSecrets}
-                        onChange={setIncludeSecrets}
+                        label="Exclude sensitive data"
+                        checked={excludeSecrets}
+                        onChange={setExcludeSecrets}
                     />
                 </div>
 
                 <div className="relative">
                     <pre className="bg-gray-900 text-gray-300 p-4 rounded-lg font-mono text-xs overflow-auto max-h-64">
-                        {mockConfig}
+                        {configContent}
                     </pre>
                     <button
-                        onClick={() => { navigator.clipboard.writeText(mockConfig); toast.success('Copied!'); }}
+                        onClick={() => { navigator.clipboard.writeText(configContent); toast.success('Copied!'); }}
                         className="absolute top-2 right-2 p-1.5 bg-gray-800 text-gray-400 hover:text-white rounded"
                     >
                         <Copy size={14} />

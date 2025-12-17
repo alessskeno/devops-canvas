@@ -195,6 +195,7 @@ devops-canvas-frontend/
 │   │   │   ├── ComponentLibrary.tsx
 │   │   │   ├── ConfigPanel.tsx
 │   │   │   ├── CanvasNode.tsx
+│   │   │   ├── KindClusterConfigForm.tsx
 │   │   │   ├── ConnectionLine.tsx
 │   │   │   └── ContextMenu.tsx
 │   │   ├── modals/
@@ -205,6 +206,7 @@ devops-canvas-frontend/
 │   │       ├── Button.tsx
 │   │       ├── Modal.tsx
 │   │       ├── Input.tsx
+│   │       ├── HighlightedText.tsx
 │   │       ├── Select.tsx
 │   │       ├── Toggle.tsx
 │   ├── hooks/
@@ -225,7 +227,10 @@ devops-canvas-frontend/
 │   │   ├── dragDrop.ts
 │   │   ├── validation.ts
 │   │   ├── componentRegistry.ts
-│   │   └── exportConfig.ts
+│   │   ├── componentConfigSchemas.ts # Centralized schema definitions
+│   │   ├── security.ts             # Sensitivity detection logic
+│   │   ├── exportConfig.ts         # Export config generation logic
+│   │   ├── kindConfig.ts
 │   ├── styles/
 │   │   ├── globals.css
 │   │   ├── designTokens.css
@@ -312,6 +317,11 @@ devops-canvas-frontend/
   - Enabled/Disabled toggle
   
 - **Tab: Configuration (dynamic per component)**
+  - Kind Cluster:
+    - Topology: Control Planes, Workers
+    - Networking: Ingress Ready, API Server Port
+    - Storage: Extra Host Path Mounts
+    - Advanced: Config File Attachment (raw YAML patches)
   - PostgreSQL: Version, Port, Database name, Root user, Root password, Max connections, Idle connections, Timeout
   - Redis: Version, Port, Max memory, Eviction policy, Persistence toggle, Persistence type, Key space notification, Slow log threshold
   - Kafka: Version, Broker port, Zookeeper port, Brokers count, Replication factor, Min in-sync, Partitions, Log retention, Compression
@@ -352,7 +362,7 @@ devops-canvas-frontend/
 - **Layout:** Header + Content Area
 - **Path:** `/team`
 - **Tabs/Sections:**
-  1. **Overview:** Seat usage stats, Pending invites count
+  1. **Overview:** Total members count, Pending invites count, Active Workspaces,Recent Activity
   2. **Members:** Data grid (Avatar, Name, Role, Status, Last Active, Actions)
   3. **Roles:** Read-only table of permissions per role
 - **Actions:** Invite User button (Email + Role modal)
@@ -364,12 +374,16 @@ devops-canvas-frontend/
 
 | Component | Type | Ports | Key Config |
 |-----------|------|-------|-----------|
-| **Kind Cluster** | Infrastructure | Output | Nodes count, K8s version |
-| **PostgreSQL** | Database | Input/Output | Version, Port, Max connections |
-| **Redis** | Cache | Input/Output | Version, Port, Max memory |
-| **Kafka** | Queue | Input/Output | Version, Brokers, Partitions |
-| **RabbitMQ** | Queue | Input/Output | Version, Port, Management UI port |
-| **ClickHouse** | Analytics | Input/Output | Version, Port, Shards |
+| **Kind Cluster** | Infrastructure | Output | Nodes count, K8s version, Config File Attachment |
+| **PostgreSQL** | Database | Input/Output | Port, Database, User, Password, Shared Buffers, Work Mem, pg_hba.conf |
+| **Redis** | Cache | Input/Output | Port, Max Memory, Eviction Policy, Append Only, Password |
+| **MySQL** | Database | Input/Output | Port, Root Password, Max Connections, Buffer Pool Size |
+| **ClickHouse** | Analytics | Input/Output | HTTP/TCP Ports, Max Concurrent Queries, Memory Usage |
+| **Kafka** | Queue | Input/Output | Brokers, Zookeeper, Log Retention, Auto Create Topics |
+| **RabbitMQ** | Queue | Input/Output | Default User/Pass, Disk Free Limit |
+| **Alertmanager** | Monitoring | Input/Output | Port, Retention, Config File |
+| **Prometheus** | Monitoring | Input/Output | Retention, Scrape Interval, Rules Files, Alerting (Alertmanager) |
+| **Grafana** | Monitoring | Input/Output | Admin User/Pass, Allow Sign Up |
 
 **Plugin System:** Developers can create custom components with JSON schema validation.
 
@@ -390,6 +404,10 @@ devops-canvas-frontend/
 - **Buttons:** Copy, Download, Generate share link
 - **Width:** 600px
 - **File:** `src/components/modals/ExportModal.tsx`
+- **Logic:**
+  - Uses `src/utils/exportConfig.ts` to generate YAML/JSON.
+  - Generates config from current canvas state (Nodes & Connections).
+  - Filters sensitive fields based on `src/utils/security.ts` (Schema-driven + Auto-detection).
 
 ### Modal: Deployment Progress
 - **Content:** Progress bar (0-100%), Component status list, Live logs

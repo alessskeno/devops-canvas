@@ -18,6 +18,7 @@ export function Dashboard() {
     const { isDark, toggle } = useDarkMode();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
     const dropdownRef = React.useRef<HTMLDivElement>(null);
 
     // Close dropdown when clicking outside
@@ -73,6 +74,8 @@ export function Dashboard() {
                             type="text"
                             placeholder="Search workspaces..."
                             className="w-full bg-slate-200 dark:bg-slate-800 border-none rounded-lg py-2 pl-10 pr-4 text-sm focus:ring-2 focus:ring-blue-500 dark:text-white"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
                         />
                     </div>
                 </div>
@@ -163,13 +166,16 @@ export function Dashboard() {
                             <div key={i} className="h-48 bg-slate-300 dark:bg-slate-900 rounded-xl animate-pulse"></div>
                         ))
                     ) : (
-                        workspaces.map((ws) => (
-                            <WorkspaceCard
-                                key={ws.id}
-                                workspace={ws}
-                                onClick={() => navigate(`/workspace/${ws.id}`)}
-                            />
-                        ))
+                        workspaces
+                            .filter(ws => ws.name.toLowerCase().includes(searchTerm.toLowerCase()))
+                            .map((ws) => (
+                                <WorkspaceCard
+                                    key={ws.id}
+                                    workspace={ws}
+                                    onClick={() => navigate(`/workspace/${ws.id}`)}
+                                    highlight={searchTerm}
+                                />
+                            ))
                     )}
                 </div>
             </main>

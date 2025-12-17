@@ -13,6 +13,7 @@ import { Button } from '../shared/Button';
 import { useCanvasStore } from '../../store/canvasStore';
 import toast from 'react-hot-toast';
 import { useDarkMode } from '../../hooks/useDarkMode';
+import { ExportModal } from '../modals/ExportModal';
 
 
 
@@ -26,13 +27,9 @@ export function NodeEditor() {
     const [showDeployModal, setShowDeployModal] = useState(false);
     const [deployStep, setDeployStep] = useState(0);
     const [showExportModal, setShowExportModal] = useState(false);
-    const [exportFormat, setExportFormat] = useState<'YAML' | 'JSON' | 'Terraform'>(() => (localStorage.getItem('canvas_export_fmt') as any) || 'JSON');
-    useEffect(() => localStorage.setItem('canvas_export_fmt', exportFormat), [exportFormat]);
     const [showUnsavedModal, setShowUnsavedModal] = useState(false);
     const [showImportModal, setShowImportModal] = useState(false);
     const [dragActive, setDragActive] = useState(false);
-    const [excludeSensitive, setExcludeSensitive] = useState(() => localStorage.getItem('canvas_exclude_sensitive') === 'true');
-    useEffect(() => localStorage.setItem('canvas_exclude_sensitive', String(excludeSensitive)), [excludeSensitive]);
     const importInputRef = React.useRef<HTMLInputElement>(null);
 
     // Persistence State
@@ -246,16 +243,6 @@ export function NodeEditor() {
             setDeployStep(step);
             if (step >= 4) clearInterval(interval);
         }, 1500);
-    };
-
-    const generateExportData = () => {
-        const data = {
-            version: "1.2.4",
-            timestamp: new Date().toISOString(),
-            nodes: nodes.map(n => excludeSensitive ? { ...n, data: { ...n.data, apiKey: undefined, password: undefined } } : n),
-            connections
-        };
-        return JSON.stringify(data, null, 2);
     };
 
     const confirmExit = () => {
@@ -553,69 +540,7 @@ export function NodeEditor() {
             )}
 
             {/* 7. Export Modal */}
-            {showExportModal && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-white dark:bg-slate-900 w-full max-w-3xl h-[600px] rounded-xl shadow-xl border border-gray-200 dark:border-slate-800 flex flex-col animate-in zoom-in-95 duration-200">
-                        <div className="p-4 border-b border-gray-100 dark:border-slate-800 flex justify-between items-center">
-                            <h3 className="font-bold text-gray-900 dark:text-white">Export Configuration</h3>
-                            <button onClick={() => setShowExportModal(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"><X size={20} /></button>
-                        </div>
-
-                        <div className="p-4 space-y-4 flex-1 flex flex-col overflow-hidden">
-                            {/* Format Tabs */}
-                            <div className="flex p-1 bg-gray-100 dark:bg-slate-800 rounded-lg">
-                                {(['YAML', 'JSON', 'Terraform'] as const).map(fmt => (
-                                    <button
-                                        key={fmt}
-                                        onClick={() => setExportFormat(fmt)}
-                                        className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${exportFormat === fmt ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
-                                    >
-                                        {fmt}
-                                    </button>
-                                ))}
-                            </div>
-
-                            {/* Preview Area */}
-                            <div className="relative flex-1 bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-lg overflow-hidden group">
-                                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button
-                                        onClick={() => navigator.clipboard.writeText(generateExportData())}
-                                        className="p-1.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-md text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 shadow-sm"
-                                        title="Copy to clipboard"
-                                    >
-                                        <Copy size={14} />
-                                    </button>
-                                </div>
-                                <textarea
-                                    readOnly
-                                    className="w-full h-full p-4 bg-transparent font-mono text-sm text-gray-600 dark:text-gray-300 resize-none focus:outline-none"
-                                    value={generateExportData()}
-                                />
-                            </div>
-
-                            {/* Options */}
-                            <label className="flex items-center gap-2 cursor-pointer select-none">
-                                <input
-                                    type="checkbox"
-                                    className="rounded border-gray-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500 dark:bg-slate-800"
-                                    checked={excludeSensitive}
-                                    onChange={(e) => setExcludeSensitive(e.target.checked)}
-                                />
-                                <span className="text-sm text-gray-600 dark:text-gray-400">Exclude sensitive data (secrets, passwords)</span>
-                            </label>
-                        </div>
-
-                        <div className="p-4 border-t border-gray-100 dark:border-slate-800 flex gap-3">
-                            <Button className="flex-1" onClick={() => { /* Download Logic */ setShowExportModal(false); }}>
-                                <Download size={16} /> Download File
-                            </Button>
-                            <Button variant="secondary" className="flex-1" onClick={() => { /* Share Logic */ setShowExportModal(false); }}>
-                                <Share2 size={16} /> Share Link
-                            </Button>
-                        </div>
-                    </div>
-                </div>
-            )}
+            <ExportModal isOpen={showExportModal} onClose={() => setShowExportModal(false)} />
 
             {/* 8. Unsaved Changes Modal */}
             {showUnsavedModal && (

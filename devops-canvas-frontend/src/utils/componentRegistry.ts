@@ -9,7 +9,7 @@ export const COMPONENT_REGISTRY: ComponentDefinition[] = [
         icon: 'Container',
         category: 'infrastructure',
         color: 'text-blue-600 bg-blue-100 dark:text-blue-400 dark:bg-blue-900/30',
-        defaultConfig: { label: 'Kind Cluster', nodes: 3, version: '1.27.3' }
+        defaultConfig: { label: 'Kind Cluster' }
     },
     // Databases
     {
@@ -19,7 +19,7 @@ export const COMPONENT_REGISTRY: ComponentDefinition[] = [
         icon: 'Database',
         category: 'database',
         color: 'text-indigo-600 bg-indigo-100 dark:text-indigo-400 dark:bg-indigo-900/30',
-        defaultConfig: { label: 'Primary DB', port: 5432, dbName: 'app_prod', user: 'postgres' }
+        defaultConfig: { label: 'Primary DB' }
     },
     {
         type: 'mysql',
@@ -28,7 +28,7 @@ export const COMPONENT_REGISTRY: ComponentDefinition[] = [
         icon: 'Database',
         category: 'database',
         color: 'text-blue-600 bg-blue-100 dark:text-blue-400 dark:bg-blue-900/30',
-        defaultConfig: { label: 'MySQL DB', port: 3306, user: 'root' }
+        defaultConfig: { label: 'MySQL DB' }
     },
     {
         type: 'clickhouse',
@@ -37,7 +37,7 @@ export const COMPONENT_REGISTRY: ComponentDefinition[] = [
         icon: 'BarChart',
         category: 'database',
         color: 'text-yellow-600 bg-yellow-100 dark:text-yellow-400 dark:bg-yellow-900/30',
-        defaultConfig: { label: 'Analytics DB', port: 8123 }
+        defaultConfig: { label: 'Analytics DB' }
     },
     // Caching
     {
@@ -47,7 +47,7 @@ export const COMPONENT_REGISTRY: ComponentDefinition[] = [
         icon: 'Layers',
         category: 'caching',
         color: 'text-red-600 bg-red-100 dark:text-red-400 dark:bg-red-900/30',
-        defaultConfig: { label: 'Cache Layer', port: 6379, maxMemory: '512mb' }
+        defaultConfig: { label: 'Cache Layer' }
     },
     {
         type: 'valkey',
@@ -56,7 +56,7 @@ export const COMPONENT_REGISTRY: ComponentDefinition[] = [
         icon: 'Layers',
         category: 'caching',
         color: 'text-pink-600 bg-pink-100 dark:text-pink-400 dark:bg-pink-900/30',
-        defaultConfig: { label: 'Valkey Cache', port: 6379 }
+        defaultConfig: { label: 'Valkey Cache' }
     },
     // Messaging
     {
@@ -66,7 +66,7 @@ export const COMPONENT_REGISTRY: ComponentDefinition[] = [
         icon: 'Activity',
         category: 'messaging',
         color: 'text-orange-600 bg-orange-100 dark:text-orange-400 dark:bg-orange-900/30',
-        defaultConfig: { label: 'Event Stream', brokers: 3 }
+        defaultConfig: { label: 'Event Stream' }
     },
     {
         type: 'rabbitmq',
@@ -75,7 +75,45 @@ export const COMPONENT_REGISTRY: ComponentDefinition[] = [
         icon: 'Activity',
         category: 'messaging',
         color: 'text-amber-600 bg-amber-100 dark:text-amber-400 dark:bg-amber-900/30',
-        defaultConfig: { label: 'Message Queue', port: 5672, managementPort: 15672 }
+        defaultConfig: { label: 'Message Queue' }
+    },
+    // Monitoring
+    {
+        type: 'prometheus',
+        name: 'Prometheus',
+        description: 'Systems Monitoring',
+        icon: 'Activity',
+        category: 'monitoring',
+        color: 'text-red-600 bg-red-100 dark:text-red-400 dark:bg-red-900/30',
+        defaultConfig: { label: 'Prometheus' }
+    },
+    {
+        type: 'alertmanager',
+        name: 'Alertmanager',
+        description: 'Alerting System',
+        icon: 'Bell',
+        category: 'monitoring',
+        color: 'text-pink-600 bg-pink-100 dark:text-pink-400 dark:bg-pink-900/30',
+        defaultConfig: { label: 'Alertmanager' }
+    },
+    {
+        type: 'grafana',
+        name: 'Grafana',
+        description: 'Metric Visualization',
+        icon: 'BarChart',
+        category: 'monitoring',
+        color: 'text-orange-600 bg-orange-100 dark:text-orange-400 dark:bg-orange-900/30',
+        defaultConfig: { label: 'Grafana' }
+    },
+    // Configuration
+    {
+        type: 'file',
+        name: 'Config File',
+        description: 'Text/Config Content',
+        icon: 'FileText',
+        category: 'configuration',
+        color: 'text-slate-600 bg-slate-100 dark:text-slate-300 dark:bg-slate-700',
+        defaultConfig: { label: 'config.yaml' }
     }
 ];
 

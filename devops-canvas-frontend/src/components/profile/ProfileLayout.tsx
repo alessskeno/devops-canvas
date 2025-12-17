@@ -53,7 +53,7 @@ const GeneralSettings = () => (
                 <input
                     type="email"
                     defaultValue="admin@devopscanvas.io"
-                    className="block w-full rounded-md border-gray-300 dark:border-slate-700 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-white dark:text-slate-900 py-2.5 px-3 border text-gray-500 bg-gray-50"
+                    className="block w-full rounded-md border-gray-300 dark:border-slate-700 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-slate-900 dark:text-white py-2.5 px-3 border text-gray-500 bg-gray-50"
                 />
             </div>
 

@@ -1,8 +1,9 @@
 import React, { useRef } from 'react';
 import { CanvasNode as NodeData } from '../../types';
-import { Database, Server, Box, Layers, Activity, HardDrive, BarChart2, X, Lock } from 'lucide-react';
+import { Database, Server, Box, Layers, Activity, HardDrive, BarChart2, X, Lock, FileText, Bell } from 'lucide-react';
 import { useCanvasStore } from '../../store/canvasStore';
 import { getComponentByType } from '../../utils/componentRegistry';
+import { isFieldSensitive } from '../../utils/security';
 
 interface CanvasNodeProps {
     node: NodeData;
@@ -18,7 +19,9 @@ const IconMap: Record<string, any> = {
     'Activity': Activity,
     'Server': Server,
     'HardDrive': HardDrive,
-    'BarChart': BarChart2
+    'BarChart': BarChart2,
+    'Bell': Bell,
+    'FileText': FileText
 };
 
 function CanvasNodeComponent({ node, scale, isSelected }: CanvasNodeProps) {
@@ -208,14 +211,27 @@ function CanvasNodeComponent({ node, scale, isSelected }: CanvasNodeProps) {
                 <div className="flex flex-col space-y-2">
                     {Object.entries(node.data)
                         .filter(([key]) => !['label', 'enabled', 'description', 'icon', 'locked'].includes(key))
-                        .map(([key, value]) => (
-                            <div key={key} className="flex justify-between items-center w-full">
-                                <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{key}</span>
-                                <span className="font-mono text-xs text-blue-600 dark:text-blue-400 font-bold truncate max-w-[60%] text-right" title={String(value)}>
-                                    {String(value)}
-                                </span>
-                            </div>
-                        ))}
+                        .reduce((acc, [key, value]) => {
+                            if (key === 'resources' && typeof value === 'object' && value !== null) {
+                                return [...acc, ...Object.entries(value)];
+                            }
+                            return [...acc, [key, value]];
+                        }, [] as [string, any][])
+                        .map(([key, value]) => {
+                            const isSensitive = isFieldSensitive(node.type, key);
+                            return (
+                                <div key={key} className="flex justify-between items-center w-full">
+                                    <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{key}</span>
+                                    <span className="font-mono text-xs text-blue-600 dark:text-blue-400 font-bold truncate max-w-[60%] text-right" title={isSensitive ? 'Hidden' : (typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value))}>
+                                        {isSensitive
+                                            ? '••••••••'
+                                            : (typeof value === 'object' && value !== null
+                                                ? JSON.stringify(value).replace(/["{}]/g, '').replace(/,/g, ', ')
+                                                : String(value))}
+                                    </span>
+                                </div>
+                            );
+                        })}
 
                     {/* Render message if empty */}
                     {Object.entries(node.data).filter(([key]) => !['label', 'enabled', 'description', 'icon', 'locked'].includes(key)).length === 0 && (

@@ -1,13 +1,15 @@
 import React from 'react';
 import { Workspace } from '../../types';
 import { MoreVertical, Layers, Server, Activity, ArrowRight, ExternalLink, Share2, Copy, Trash2, Download } from 'lucide-react';
+import { HighlightedText } from '../shared/HighlightedText';
 
 interface WorkspaceCardProps {
     workspace: Workspace;
     onClick: () => void;
+    highlight?: string;
 }
 
-export function WorkspaceCard({ workspace, onClick }: WorkspaceCardProps) {
+export function WorkspaceCard({ workspace, onClick, highlight = '' }: WorkspaceCardProps) {
     const [isMenuOpen, setIsMenuOpen] = React.useState(false);
     const menuRef = React.useRef<HTMLDivElement>(null);
 
@@ -98,7 +100,7 @@ export function WorkspaceCard({ workspace, onClick }: WorkspaceCardProps) {
             </div>
 
             <h3 className="text-lg font-bold text-slate-950 dark:text-white mb-1 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                {workspace.name}
+                <HighlightedText text={workspace.name} highlight={highlight} />
             </h3>
             <p className="text-sm text-slate-600 dark:text-slate-500 mb-6 h-10 overflow-hidden text-ellipsis line-clamp-2">
                 {workspace.description || 'No description provided.'}

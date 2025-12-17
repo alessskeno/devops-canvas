@@ -40,10 +40,26 @@ export interface Connection {
     animated?: boolean;
 }
 
+export interface KindClusterConfig {
+    name: string;
+    version: string;
+    topology: {
+        controlPlanes: number;
+        workers: number;
+    };
+    networking: {
+        enableIngress: boolean;
+        apiServerPort?: number;
+    };
+    mounts: Array<{ hostPath: string; containerPath: string }>;
+    advancedConfigNodeId?: string;
+}
+
 export interface ComponentConfig {
     label: string;
-    componentType: 'infrastructure' | 'database' | 'queue' | 'caching' | 'custom' | 'messaging' | 'analytics';
+    componentType: 'infrastructure' | 'database' | 'queue' | 'caching' | 'custom' | 'messaging' | 'analytics' | 'monitoring' | 'configuration';
     version?: string;
+    kindConfig?: KindClusterConfig;
     status?: 'idle' | 'starting' | 'running' | 'error' | 'stopped';
     ports?: Record<string, string | number>;
     resources?: {
