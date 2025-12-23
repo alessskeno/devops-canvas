@@ -4,6 +4,8 @@ import { Database, Server, Box, Layers, Activity, HardDrive, BarChart2, X, Lock,
 import { useCanvasStore } from '../../store/canvasStore';
 import { getComponentByType } from '../../utils/componentRegistry';
 import { isFieldSensitive } from '../../utils/security';
+import { validateConnection } from '../../utils/validation';
+import toast from 'react-hot-toast';
 
 interface CanvasNodeProps {
     node: NodeData;
@@ -122,6 +124,19 @@ function CanvasNodeComponent({ node, scale, isSelected }: CanvasNodeProps) {
         const draftConnection = useCanvasStore.getState().draftConnection;
 
         if (type === 'input' && draftConnection) {
+            // Validate Connection
+            const sourceNode = useCanvasStore.getState().nodes.find(n => n.id === draftConnection.sourceId);
+            const targetNode = node; // Current node is target
+
+            if (sourceNode && targetNode) {
+                const validation = validateConnection(sourceNode.type, targetNode.type);
+                if (!validation.valid) {
+                    toast.error(validation.message || 'Invalid connection');
+                    setDraftConnection(null);
+                    return;
+                }
+            }
+
             // Complete connection
             if (draftConnection.sourceId !== node.id) {
                 addConnection({

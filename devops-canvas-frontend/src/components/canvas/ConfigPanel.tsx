@@ -8,6 +8,7 @@ import { X, Trash2, Copy } from 'lucide-react';
 import { COMPONENT_REGISTRY } from '../../utils/componentRegistry';
 import { COMPONENT_CONFIG_SCHEMAS, ConfigField } from '../../utils/componentConfigSchemas';
 import { KindClusterConfigForm } from './KindClusterConfigForm';
+import { AlertmanagerConfigForm } from './AlertmanagerConfigForm';
 
 export function ConfigPanel() {
     const {
@@ -144,6 +145,12 @@ export function ConfigPanel() {
                                 nodes={nodes}
                                 connections={connections}
                                 nodeId={selectedNode.id}
+                            />
+                        ) : selectedNode.type === 'alertmanager' ? (
+                            <AlertmanagerConfigForm
+                                config={selectedNode.data.alertmanagerConfig || { destination: 'discord' }}
+                                onChange={(newConfig) => handleChange('alertmanagerConfig', newConfig)}
+                                readOnly={isLocked}
                             />
                         ) : COMPONENT_CONFIG_SCHEMAS[selectedNode.type] ? (
                             <div className="space-y-4">

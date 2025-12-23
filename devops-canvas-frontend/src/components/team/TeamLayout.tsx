@@ -14,20 +14,11 @@ import { useNavigate } from 'react-router-dom';
 import { cn } from '../../utils/cn';
 import { Button } from '../shared/Button';
 import { Input } from '../shared/Input';
+import { useTeamStore, TeamMember } from '../../store/teamStore';
+import { useAuthStore } from '../../store/authStore';
+import toast from 'react-hot-toast';
 
-interface TeamMember {
-    id: string;
-    name: string;
-    email: string;
-    role: 'Owner' | 'Admin' | 'Editor' | 'Viewer';
-    status: 'Active' | 'Invited';
-    lastActive?: string;
-}
 
-const MOCK_INITIAL_MEMBERS: TeamMember[] = [
-    { id: '1', name: 'Jane Doe', email: 'jane@example.com', role: 'Owner', status: 'Active', lastActive: '2 mins ago' },
-    { id: '2', name: 'John Smith', email: 'john@example.com', role: 'Editor', status: 'Active', lastActive: '1 day ago' },
-];
 
 export default function TeamLayout() {
     const navigate = useNavigate();
@@ -35,40 +26,35 @@ export default function TeamLayout() {
     const [inviteEmail, setInviteEmail] = useState('');
     const [inviteRole, setInviteRole] = useState<'Admin' | 'Editor' | 'Viewer'>('Viewer');
 
-    // Local state simulating the store
-    const [teamMembers, setTeamMembers] = useState<TeamMember[]>(MOCK_INITIAL_MEMBERS);
+    // Store integration
+    const { members, fetchMembers, inviteMember, updateRole, removeMember } = useTeamStore();
+    const { user } = useAuthStore();
+    const teamMembers = members || [];
+    const [isLoading, setIsLoading] = React.useState(false);
 
-    const addTeamMember = (member: TeamMember) => {
-        setTeamMembers([...teamMembers, member]);
-    };
+    React.useEffect(() => {
+        fetchMembers();
+    }, [fetchMembers]);
 
-    const removeTeamMember = (id: string) => {
-        setTeamMembers(teamMembers.filter(m => m.id !== id));
-    };
-
-    const updateTeamMemberRole = (id: string, role: TeamMember['role']) => {
-        setTeamMembers(teamMembers.map(m => m.id === id ? { ...m, role } : m));
-    };
 
     const menuItems = [
         { id: 'overview', label: 'Overview', icon: LayoutDashboard },
         { id: 'members', label: 'Members', icon: Users },
-        { id: 'invite', label: 'Invite Users', icon: UserPlus },
+        ...((user?.role === 'Owner' || user?.role === 'Admin') ? [{ id: 'invite', label: 'Invite Users', icon: UserPlus }] : []),
         { id: 'roles', label: 'Roles & Permissions', icon: ShieldCheck },
     ];
 
-    const handleInvite = (e: React.FormEvent) => {
+    const handleInvite = async (e: React.FormEvent) => {
         e.preventDefault();
         if (inviteEmail) {
-            addTeamMember({
-                id: Date.now().toString(),
-                name: inviteEmail.split('@')[0],
-                email: inviteEmail,
-                role: inviteRole,
-                status: 'Invited'
-            });
-            setInviteEmail('');
-            setActiveTab('members');
+            try {
+                await inviteMember(inviteEmail, inviteRole);
+                toast.success('Invitation sent successfully');
+                setInviteEmail('');
+                setActiveTab('members');
+            } catch (error: any) {
+                toast.error(error.message || 'Failed to send invitation');
+            }
         }
     };
 
@@ -166,7 +152,9 @@ export default function TeamLayout() {
                                     <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">Team Members</h2>
                                     <p className="text-sm text-gray-500 dark:text-gray-400">Manage access and roles for your team.</p>
                                 </div>
-                                <Button onClick={() => setActiveTab('invite')} className="h-9 text-sm"><UserPlus size={16} /> Invite Member</Button>
+                                {(user?.role === 'Owner' || user?.role === 'Admin') && (
+                                    <Button onClick={() => setActiveTab('invite')} className="h-9 text-sm"><UserPlus size={16} /> Invite Member</Button>
+                                )}
                             </div>
 
                             <div className="border border-gray-200 dark:border-slate-700 rounded-xl overflow-hidden">
@@ -198,11 +186,11 @@ export default function TeamLayout() {
                                                     <td className="px-6 py-4">
                                                         <select
                                                             value={member.role}
-                                                            onChange={(e) => updateTeamMemberRole(member.id, e.target.value as any)}
-                                                            className="bg-transparent border-none text-gray-700 dark:text-gray-300 focus:ring-0 cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-800 rounded px-2 py-1 -ml-2 text-sm"
-                                                            disabled={member.role === 'Owner'}
+                                                            onChange={(e) => updateRole(member.id, e.target.value)}
+                                                            className="bg-transparent border-none text-gray-700 dark:text-gray-300 focus:ring-0 cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-800 rounded px-2 py-1 -ml-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                                            disabled={user?.role !== 'Owner' || user?.id === member.id}
                                                         >
-                                                            <option>Owner</option>
+                                                            {member.role === 'Owner' && <option>Owner</option>}
                                                             <option>Admin</option>
                                                             <option>Editor</option>
                                                             <option>Viewer</option>
@@ -215,8 +203,8 @@ export default function TeamLayout() {
                                                     </td>
                                                     <td className="px-6 py-4 text-gray-500 dark:text-gray-400">{member.lastActive || '-'}</td>
                                                     <td className="px-6 py-4 text-right">
-                                                        {member.role !== 'Owner' && (
-                                                            <button onClick={() => removeTeamMember(member.id)} className="text-gray-400 hover:text-red-500 transition-colors">
+                                                        {member.id !== user?.id && member.role !== 'Owner' && (user?.role === 'Owner' || (user?.role === 'Admin' && member.role !== 'Admin')) && (
+                                                            <button onClick={() => removeMember(member.id)} className="text-gray-400 hover:text-red-500 transition-colors">
                                                                 <Trash2 size={16} />
                                                             </button>
                                                         )}

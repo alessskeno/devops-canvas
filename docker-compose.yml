@@ -1,0 +1,94 @@
+version: '3.8'
+
+services:
+  # ---------------------------------------------------------------------------
+  # Database Layer
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:15-alpine
+    container_name: devops-canvas-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-devops}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devops123}
+      POSTGRES_DB: ${POSTGRES_DB:-devopscanvas}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - canvas-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-devops} -d ${POSTGRES_DB:-devopscanvas}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: devops-canvas-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - canvas-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Backend API
+  # ---------------------------------------------------------------------------
+  backend:
+    build:
+      context: ./devops-canvas-backend
+      dockerfile: Dockerfile
+    container_name: devops-canvas-api
+    restart: always
+    environment:
+      - PORT=8080
+      - DB_HOST=postgres
+      - DB_USER=${POSTGRES_USER:-devops}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-devops123}
+      - DB_NAME=${POSTGRES_DB:-devopscanvas}
+      - REDIS_ADDR=redis:6379
+      - JWT_SECRET=${JWT_SECRET:-supersecretkey}
+    volumes:
+      # Mount docker socket to allow orchestrating sibling containers
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - canvas-network
+
+  # ---------------------------------------------------------------------------
+  # Frontend
+  # ---------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./devops-canvas-frontend
+      dockerfile: Dockerfile
+    container_name: devops-canvas-ui
+    environment:
+      - VITE_API_URL=http://localhost:8080
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - canvas-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  canvas-network:
+    driver: bridge

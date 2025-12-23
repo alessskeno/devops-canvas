@@ -2,7 +2,10 @@ export interface User {
     id: string;
     email: string;
     name: string;
-    role: 'admin' | 'user';
+    job_title?: string;
+    mfa_enabled?: boolean;
+    preferences?: Record<string, any>;
+    role: string;
     createdAt: string;
 }
 
@@ -55,11 +58,23 @@ export interface KindClusterConfig {
     advancedConfigNodeId?: string;
 }
 
+export interface AlertmanagerConfig {
+    destination: 'discord' | 'telegram';
+    discord?: {
+        webhook_url: string;
+    };
+    telegram?: {
+        bot_token: string;
+        chat_id: string;
+    };
+}
+
 export interface ComponentConfig {
     label: string;
     componentType: 'infrastructure' | 'database' | 'queue' | 'caching' | 'custom' | 'messaging' | 'analytics' | 'monitoring' | 'configuration';
     version?: string;
     kindConfig?: KindClusterConfig;
+    alertmanagerConfig?: AlertmanagerConfig;
     status?: 'idle' | 'starting' | 'running' | 'error' | 'stopped';
     ports?: Record<string, string | number>;
     resources?: {

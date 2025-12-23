@@ -9,7 +9,16 @@ export const COMPONENT_REGISTRY: ComponentDefinition[] = [
         icon: 'Container',
         category: 'infrastructure',
         color: 'text-blue-600 bg-blue-100 dark:text-blue-400 dark:bg-blue-900/30',
-        defaultConfig: { label: 'Kind Cluster' }
+        defaultConfig: {
+            label: 'Kind Cluster',
+            kindConfig: {
+                name: 'dev-cluster',
+                version: 'v1.27.3',
+                topology: { controlPlanes: 1, workers: 2 },
+                networking: { enableIngress: true },
+                mounts: []
+            }
+        }
     },
     // Databases
     {

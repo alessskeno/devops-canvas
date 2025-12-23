@@ -195,6 +195,7 @@ devops-canvas-frontend/
 │   │   │   ├── ComponentLibrary.tsx
 │   │   │   ├── ConfigPanel.tsx
 │   │   │   ├── CanvasNode.tsx
+│   │   │   ├── AlertmanagerConfigForm.tsx
 │   │   │   ├── KindClusterConfigForm.tsx
 │   │   │   ├── ConnectionLine.tsx
 │   │   │   └── ContextMenu.tsx
@@ -226,6 +227,7 @@ devops-canvas-frontend/
 │   │   ├── api.ts (axios client)
 │   │   ├── dragDrop.ts
 │   │   ├── validation.ts
+│   │   ├── alertmanagerConfig.ts
 │   │   ├── componentRegistry.ts
 │   │   ├── componentConfigSchemas.ts # Centralized schema definitions
 │   │   ├── security.ts             # Sensitivity detection logic

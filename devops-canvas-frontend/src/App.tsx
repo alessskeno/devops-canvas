@@ -1,7 +1,8 @@
 import React, { useEffect } from 'react';
 import { createBrowserRouter, RouterProvider, Navigate, Outlet } from 'react-router-dom';
-import { Toaster } from 'react-hot-toast';
+import { Toaster, useToasterStore, toast } from 'react-hot-toast';
 import { LoginPage } from './components/auth/LoginPage';
+import AcceptInvite from './components/auth/AcceptInvite';
 import { AdminSetup } from './components/auth/AdminSetup';
 import { Dashboard } from './components/workspace/Dashboard';
 import { NodeEditor } from './components/canvas/NodeEditor';
@@ -15,11 +16,21 @@ import { useDarkMode } from './hooks/useDarkMode';
 const RootLayout = () => {
   useDarkMode(); // Initialise theme
   const checkStatus = useAuthStore((state: any) => state.checkSystemStatus);
+  const { toasts } = useToasterStore();
+  const TOAST_LIMIT = 3;
+
   useEffect(() => { checkStatus(); }, []);
+
+  useEffect(() => {
+    toasts
+      .filter((t) => t.visible)
+      .filter((_, i) => i >= TOAST_LIMIT)
+      .forEach((t) => toast.dismiss(t.id));
+  }, [toasts]);
 
   return (
     <>
-      <Toaster position="top-right" />
+      <Toaster position="top-right" containerStyle={{ top: 20, right: 20 }} toastOptions={{ duration: 3000 }} />
       <Outlet />
     </>
   );
@@ -44,6 +55,7 @@ const router = createBrowserRouter([
     element: <RootLayout />,
     children: [
       { path: "/login", element: <LoginPage /> },
+      { path: "/accept-invite", element: <AcceptInvite /> },
       { path: "/admin-setup", element: <AdminSetup /> },
       {
         path: "/dashboard",

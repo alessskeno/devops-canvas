@@ -127,22 +127,7 @@ export const COMPONENT_CONFIG_SCHEMAS: Record<string, ConfigField[]> = {
         { key: 'max_length_bytes', label: 'Max Length (Bytes)', type: 'text' },
         { key: 'message_ttl', label: 'Message TTL (ms)', type: 'number' }
     ],
-    'kind-cluster': [
-        { key: 'version', label: 'Kubernetes Version', type: 'text', defaultValue: 'v1.27.3' },
-        { key: 'nodes', label: 'Node Count', type: 'number', defaultValue: 1 },
-        {
-            key: 'role',
-            label: 'Node Role',
-            type: 'select',
-            options: [
-                { label: 'control-plane', value: 'control-plane' },
-                { label: 'worker', value: 'worker' }
-            ],
-            defaultValue: 'control-plane'
-        },
-        { key: 'featureGates', label: 'Feature Gates', type: 'text', placeholder: 'GateA=true,GateB=false' },
-        { key: 'runtimeConfig', label: 'Runtime Config', type: 'text' }
-    ],
+    'kind-cluster': [],
     'prometheus': [
         { key: 'port', label: 'Port', type: 'number', defaultValue: 9090 },
         { key: 'retention', label: 'Retention Period', type: 'text', defaultValue: '15d' },

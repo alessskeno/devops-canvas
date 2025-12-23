@@ -5,6 +5,7 @@ import { ConnectionLine } from './ConnectionLine';
 import { useDrop } from '../../utils/dragDrop'; // Placeholder for hook
 import { CanvasNode as NodeType } from '../../types';
 import { ContextMenu } from './ContextMenu';
+import { COMPONENT_CONFIG_SCHEMAS } from '../../utils/componentConfigSchemas';
 
 export function CanvasArea() {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -137,11 +138,25 @@ export function CanvasArea() {
             const x = (e.clientX - rect.left - pan.x) / scale;
             const y = (e.clientY - rect.top - pan.y) / scale;
 
+            let initialData = configStr ? JSON.parse(configStr) : { label: 'New Component' };
+
+            // Merge Schema Defaults
+            const schema = COMPONENT_CONFIG_SCHEMAS[type];
+            if (schema) {
+                const defaults = schema.reduce((acc, field) => {
+                    if (field.defaultValue !== undefined) {
+                        acc[field.key] = field.defaultValue;
+                    }
+                    return acc;
+                }, {} as any);
+                initialData = { ...defaults, ...initialData };
+            }
+
             const newNode: NodeType = {
                 id: `node-${Date.now()}`,
                 type,
                 position: { x, y },
-                data: configStr ? JSON.parse(configStr) : { label: 'New Component' }
+                data: initialData
             };
 
             addNode(newNode);

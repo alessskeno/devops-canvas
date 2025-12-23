@@ -35,7 +35,11 @@ export function LoginPage() {
             toast.success('Welcome back!');
             navigate('/dashboard');
         } catch (error: any) {
-            toast.error(error.message || 'Login failed');
+            if (error.code === '401' || error.message?.includes('401')) {
+                toast.error('Invalid credentials. Please check your email and password.');
+            } else {
+                toast.error(error.message || 'Login failed');
+            }
         }
     };
 

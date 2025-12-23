@@ -6,126 +6,232 @@ import { Input } from '../shared/Input';
 import { Toggle } from '../shared/Toggle';
 import { useDarkMode } from '../../hooks/useDarkMode';
 
-const GeneralSettings = () => (
-    <div className="space-y-8">
-        <div>
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white">General Information</h3>
-            <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">
-                Manage your personal details and public profile.
-            </p>
-        </div>
+import { useAuthStore } from '../../store/authStore';
+import toast from 'react-hot-toast';
 
-        <div className="flex items-center gap-x-6">
-            <div className="h-24 w-24 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-3xl font-bold shadow-md">
-                JD
-            </div>
+const GeneralSettings = () => {
+    const user = useAuthStore((state) => state.user);
+    const updateProfile = useAuthStore((state) => state.updateProfile);
+    const isLoading = useAuthStore((state) => state.isLoading);
+
+    // Split name into First/Last for UI (naive approach)
+    const [firstName, setFirstName] = useState(() => user?.name?.split(' ')[0] || '');
+    const [lastName, setLastName] = useState(() => user?.name?.split(' ').slice(1).join(' ') || '');
+    const [email, setEmail] = useState(user?.email || '');
+    const [jobTitle, setJobTitle] = useState(user?.job_title || '');
+
+    const handleSubmit = async () => {
+        try {
+            await updateProfile({
+                name: `${firstName} ${lastName}`.trim(),
+                email,
+                job_title: jobTitle
+            });
+            toast.success('Profile updated successfully');
+        } catch (error: any) {
+            toast.error(error.message || 'Failed to update profile');
+        }
+    };
+
+    return (
+        <div className="space-y-8">
             <div>
-                <button className="bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-200 border border-gray-300 dark:border-slate-700 font-medium py-2 px-4 rounded-md text-sm hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors shadow-sm">
-                    Upload New Picture
-                </button>
-                <p className="mt-2 text-xs text-gray-500 dark:text-slate-400">
-                    JPG, GIF or PNG. Max size of 800K
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white">General Information</h3>
+                <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">
+                    Manage your personal details and public profile.
                 </p>
             </div>
-        </div>
 
-        <div className="grid grid-cols-1 gap-x-6 gap-y-6 sm:grid-cols-2">
-            <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">First Name</label>
-                <input
-                    type="text"
-                    defaultValue="Jane"
-                    className="block w-full rounded-md border-gray-300 dark:border-slate-700 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-slate-900 dark:text-white py-2.5 px-3 border"
-                />
-            </div>
-
-            <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Last Name</label>
-                <input
-                    type="text"
-                    defaultValue="Doe"
-                    className="block w-full rounded-md border-gray-300 dark:border-slate-700 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-slate-900 dark:text-white py-2.5 px-3 border"
-                />
-            </div>
-
-            <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Email Address</label>
-                <input
-                    type="email"
-                    defaultValue="admin@devopscanvas.io"
-                    className="block w-full rounded-md border-gray-300 dark:border-slate-700 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-slate-900 dark:text-white py-2.5 px-3 border text-gray-500 bg-gray-50"
-                />
-            </div>
-
-            <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Job Title</label>
-                <input
-                    type="text"
-                    defaultValue="Lead DevOps Engineer"
-                    className="block w-full rounded-md border-gray-300 dark:border-slate-700 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-slate-900 dark:text-white py-2.5 px-3 border"
-                />
-            </div>
-        </div>
-
-        <div className="pt-4 flex justify-end">
-            <button className="bg-blue-600 text-white px-5 py-2.5 rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors shadow-sm">
-                Save Changes
-            </button>
-        </div>
-    </div>
-);
-
-const SecuritySettings = () => (
-    <div className="space-y-8">
-        <div>
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white">Security</h3>
-            <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">
-                Manage your password and authentication methods.
-            </p>
-        </div>
-
-        <div className="space-y-6">
-            <h4 className="text-sm font-medium text-gray-900 dark:text-white">Change Password</h4>
-
-            <div className="space-y-4">
+            <div className="flex items-center gap-x-6">
+                <div className="h-24 w-24 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-3xl font-bold shadow-md">
+                    {firstName?.[0] || user?.email?.[0]?.toUpperCase() || 'U'}
+                </div>
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Current Password</label>
-                    <input type="password" className="block w-full rounded-md border-gray-300 dark:border-slate-700 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-slate-900 dark:text-white py-2.5 px-3 border" />
-                </div>
-
-                <div className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">New Password</label>
-                        <input type="password" className="block w-full rounded-md border-gray-300 dark:border-slate-700 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-slate-900 dark:text-white py-2.5 px-3 border" />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Confirm New Password</label>
-                        <input type="password" className="block w-full rounded-md border-gray-300 dark:border-slate-700 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-slate-900 dark:text-white py-2.5 px-3 border" />
-                    </div>
-                </div>
-
-                <div className="flex justify-end pt-2">
                     <button className="bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-200 border border-gray-300 dark:border-slate-700 font-medium py-2 px-4 rounded-md text-sm hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors shadow-sm">
-                        Update Password
+                        Upload New Picture
                     </button>
+                    <p className="mt-2 text-xs text-gray-500 dark:text-slate-400">
+                        JPG, GIF or PNG. Max size of 800K
+                    </p>
                 </div>
             </div>
-        </div>
 
-        <div className="border-t border-gray-200 dark:border-slate-800 pt-8">
-            <div className="flex items-center justify-between">
+            <div className="grid grid-cols-1 gap-x-6 gap-y-6 sm:grid-cols-2">
                 <div>
-                    <h4 className="text-sm font-medium text-gray-900 dark:text-white">Two-Factor Authentication</h4>
-                    <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">Add an extra layer of security to your account.</p>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">First Name</label>
+                    <input
+                        type="text"
+                        value={firstName}
+                        onChange={(e) => setFirstName(e.target.value)}
+                        className="block w-full rounded-md border-gray-300 dark:border-slate-700 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-slate-900 dark:text-white py-2.5 px-3 border"
+                    />
                 </div>
-                <Toggle checked={false} onChange={() => { }} />
+
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Last Name</label>
+                    <input
+                        type="text"
+                        value={lastName}
+                        onChange={(e) => setLastName(e.target.value)}
+                        className="block w-full rounded-md border-gray-300 dark:border-slate-700 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-slate-900 dark:text-white py-2.5 px-3 border"
+                    />
+                </div>
+
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Email Address</label>
+                    <input
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="block w-full rounded-md border-gray-300 dark:border-slate-700 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-slate-900 dark:text-white py-2.5 px-3 border"
+                    />
+                </div>
+
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Job Title</label>
+                    <input
+                        type="text"
+                        value={jobTitle}
+                        onChange={(e) => setJobTitle(e.target.value)}
+                        placeholder="e.g. Lead DevOps Engineer"
+                        className="block w-full rounded-md border-gray-300 dark:border-slate-700 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-slate-900 dark:text-white py-2.5 px-3 border"
+                    />
+                </div>
+            </div>
+
+            <div className="pt-4 flex justify-end">
+                <Button onClick={handleSubmit} isLoading={isLoading}>
+                    Save Changes
+                </Button>
             </div>
         </div>
-    </div>
-);
+    );
+};
+
+const SecuritySettings = () => {
+    const user = useAuthStore((state) => state.user);
+    const changePassword = useAuthStore((state) => state.changePassword);
+    const toggleMFA = useAuthStore((state) => state.toggleMFA);
+    const isLoading = useAuthStore((state) => state.isLoading);
+
+    const [currentPassword, setCurrentPassword] = useState('');
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+
+    const handleChangePassword = async () => {
+        if (newPassword !== confirmPassword) {
+            toast.error("New passwords don't match");
+            return;
+        }
+        if (newPassword.length < 6) {
+            toast.error("Password must be at least 6 characters");
+            return;
+        }
+
+        try {
+            await changePassword({ current_password: currentPassword, new_password: newPassword });
+            toast.success("Password updated successfully");
+            setCurrentPassword('');
+            setNewPassword('');
+            setConfirmPassword('');
+        } catch (error: any) {
+            toast.error(error.message || 'Failed to update password');
+        }
+    };
+
+    const handleToggleMFA = async (enabled: boolean) => {
+        try {
+            await toggleMFA(enabled);
+            toast.success(`MFA ${enabled ? 'enabled' : 'disabled'}`);
+        } catch (error: any) {
+            toast.error(error.message || 'Failed to update MFA settings');
+        }
+    };
+
+    return (
+        <div className="space-y-8">
+            <div>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white">Security</h3>
+                <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">
+                    Manage your password and authentication methods.
+                </p>
+            </div>
+
+            <div className="space-y-6">
+                <h4 className="text-sm font-medium text-gray-900 dark:text-white">Change Password</h4>
+
+                <div className="space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Current Password</label>
+                        <input
+                            type="password"
+                            value={currentPassword}
+                            onChange={(e) => setCurrentPassword(e.target.value)}
+                            className="block w-full rounded-md border-gray-300 dark:border-slate-700 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-slate-900 dark:text-white py-2.5 px-3 border"
+                        />
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">New Password</label>
+                            <input
+                                type="password"
+                                value={newPassword}
+                                onChange={(e) => setNewPassword(e.target.value)}
+                                className="block w-full rounded-md border-gray-300 dark:border-slate-700 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-slate-900 dark:text-white py-2.5 px-3 border"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Confirm New Password</label>
+                            <input
+                                type="password"
+                                value={confirmPassword}
+                                onChange={(e) => setConfirmPassword(e.target.value)}
+                                className="block w-full rounded-md border-gray-300 dark:border-slate-700 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm dark:bg-slate-900 dark:text-white py-2.5 px-3 border"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="flex justify-end pt-2">
+                        <Button onClick={handleChangePassword} isLoading={isLoading}>
+                            Update Password
+                        </Button>
+                    </div>
+                </div>
+            </div>
+
+            <div className="border-t border-gray-200 dark:border-slate-800 pt-8">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h4 className="text-sm font-medium text-gray-900 dark:text-white">Two-Factor Authentication</h4>
+                        <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">Add an extra layer of security to your account.</p>
+                    </div>
+                    <Toggle checked={user?.mfa_enabled || false} onChange={handleToggleMFA} />
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const PreferencesSettings = () => {
     const { isDark, toggle } = useDarkMode();
+    const user = useAuthStore((state) => state.user);
+    const updatePreferences = useAuthStore((state) => state.updatePreferences);
+
+    const notifications = user?.preferences?.notifications || {
+        marketing: true,
+        security: true,
+        activity: true
+    };
+
+    const handleNotificationChange = (key: string, value: boolean) => {
+        updatePreferences({
+            notifications: {
+                ...notifications,
+                [key]: value
+            }
+        });
+    };
 
     return (
         <div className="space-y-8">
@@ -182,7 +288,14 @@ const PreferencesSettings = () => {
                 <div className="space-y-4">
                     <div className="flex items-start">
                         <div className="flex h-5 items-center">
-                            <input id="marketing" name="marketing" type="checkbox" className="h-5 w-5 rounded border-gray-300 text-gray-800 focus:ring-gray-800 bg-gray-100" defaultChecked />
+                            <input
+                                id="marketing"
+                                name="marketing"
+                                type="checkbox"
+                                className="h-5 w-5 rounded border-gray-300 text-gray-800 focus:ring-gray-800 bg-gray-100"
+                                checked={notifications.marketing}
+                                onChange={(e) => handleNotificationChange('marketing', e.target.checked)}
+                            />
                         </div>
                         <div className="ml-3 text-sm">
                             <label htmlFor="marketing" className="font-medium text-gray-900 dark:text-white">Marketing Emails</label>
@@ -191,7 +304,14 @@ const PreferencesSettings = () => {
                     </div>
                     <div className="flex items-start">
                         <div className="flex h-5 items-center">
-                            <input id="security" name="security" type="checkbox" className="h-5 w-5 rounded border-gray-300 text-teal-600 focus:ring-teal-600 bg-gray-100" defaultChecked />
+                            <input
+                                id="security"
+                                name="security"
+                                type="checkbox"
+                                className="h-5 w-5 rounded border-gray-300 text-teal-600 focus:ring-teal-600 bg-gray-100"
+                                checked={notifications.security}
+                                onChange={(e) => handleNotificationChange('security', e.target.checked)}
+                            />
                         </div>
                         <div className="ml-3 text-sm">
                             <label htmlFor="security" className="font-medium text-gray-900 dark:text-white">Security Updates</label>
@@ -200,7 +320,14 @@ const PreferencesSettings = () => {
                     </div>
                     <div className="flex items-start">
                         <div className="flex h-5 items-center">
-                            <input id="activity" name="activity" type="checkbox" className="h-5 w-5 rounded border-gray-300 text-teal-600 focus:ring-teal-600 bg-gray-100" defaultChecked />
+                            <input
+                                id="activity"
+                                name="activity"
+                                type="checkbox"
+                                className="h-5 w-5 rounded border-gray-300 text-teal-600 focus:ring-teal-600 bg-gray-100"
+                                checked={notifications.activity}
+                                onChange={(e) => handleNotificationChange('activity', e.target.checked)}
+                            />
                         </div>
                         <div className="ml-3 text-sm">
                             <label htmlFor="activity" className="font-medium text-gray-900 dark:text-white">Platform Activity</label>
