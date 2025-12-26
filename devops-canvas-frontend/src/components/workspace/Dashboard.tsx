@@ -173,6 +173,9 @@ export function Dashboard() {
                                     key={ws.id}
                                     workspace={ws}
                                     onClick={() => navigate(`/workspace/${ws.id}`)}
+                                    onDelete={() => {
+                                        useWorkspaceStore.getState().deleteWorkspace(ws.id);
+                                    }}
                                     highlight={searchTerm}
                                 />
                             ))

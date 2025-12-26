@@ -10,6 +10,18 @@ export function AdminSetup() {
     const navigate = useNavigate();
     const adminSetup = useAuthStore((state) => state.adminSetup);
     const isLoading = useAuthStore((state) => state.isLoading);
+    const checkSystemStatus = useAuthStore((state) => state.checkSystemStatus);
+
+    React.useEffect(() => {
+        const check = async () => {
+            const configured = await checkSystemStatus();
+            if (configured) {
+                toast.error('System is already configured');
+                navigate('/login');
+            }
+        };
+        check();
+    }, [checkSystemStatus, navigate]);
 
     const [formData, setFormData] = useState({
         firstName: '',

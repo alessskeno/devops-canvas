@@ -20,6 +20,7 @@ func NewHandler(svc *Service) *Handler {
 func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Post("/auth/register", h.Register)
 	r.Post("/auth/login", h.Login)
+    r.Get("/auth/system-status", h.GetSystemStatus)
 	r.Get("/auth/me", h.GetMe)
 	r.Put("/auth/profile", h.UpdateProfile)
 	r.Put("/auth/password", h.ChangePassword)
@@ -27,7 +28,28 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Put("/auth/preferences", h.UpdatePreferences)
 }
 
+func (h *Handler) GetSystemStatus(w http.ResponseWriter, r *http.Request) {
+    configured, err := h.svc.IsSystemConfigured(r.Context())
+    if err != nil {
+        h.respondError(w, http.StatusInternalServerError, "Failed to check system status")
+        return
+    }
+    
+    json.NewEncoder(w).Encode(map[string]bool{"configured": configured})
+}
+
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
+    // Prevent public registration if system is already configured
+    configured, err := h.svc.IsSystemConfigured(r.Context())
+    if err != nil {
+        h.respondError(w, http.StatusInternalServerError, "Failed to check configuration")
+        return
+    }
+    if configured {
+        h.respondError(w, http.StatusForbidden, "System is already configured. Please ask an admin for an invitation.")
+        return
+    }
+
 	var req models.CreateUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.respondError(w, http.StatusBadRequest, "Invalid request body")

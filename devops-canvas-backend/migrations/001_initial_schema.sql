@@ -27,9 +27,16 @@ CREATE TABLE IF NOT EXISTS workspaces (
     environment VARCHAR(50) DEFAULT 'development',
     visibility VARCHAR(20) DEFAULT 'private',
     config_json JSONB DEFAULT '{}',
-    is_public BOOLEAN DEFAULT FALSE,
+    last_updated_by UUID REFERENCES users(id),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS workspace_members (
+    workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    role VARCHAR(50) NOT NULL DEFAULT 'viewer',
+    added_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    PRIMARY KEY (workspace_id, user_id)
 );
 CREATE TABLE IF NOT EXISTS deployments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -67,7 +67,8 @@ graph TD
 | `name` | VARCHAR | Workspace Name |
 | `description` | TEXT | |
 | `config_json` | JSONB | **Components and Connections snapshot** |
-| `is_public` | BOOLEAN | |
+| `environment` | VARCHAR | 'development', 'staging', 'production' |
+| `visibility` | VARCHAR | 'private', 'team', 'public' |
 | `created_at` | TIMESTAMP | |
 
 ### Deployments

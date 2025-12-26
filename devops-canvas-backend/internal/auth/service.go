@@ -183,6 +183,10 @@ func (s *Service) UpdatePreferences(ctx context.Context, userID string, preferen
 	return s.repo.UpdatePreferences(ctx, userID, preferences)
 }
 
+func (s *Service) IsSystemConfigured(ctx context.Context) (bool, error) {
+	return s.repo.IsSystemConfigured(ctx)
+}
+
 func (s *Service) generateToken(userID string) (string, error) {
 	secret := os.Getenv("JWT_SECRET")
 	if secret == "" {

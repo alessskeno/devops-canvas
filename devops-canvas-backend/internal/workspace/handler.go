@@ -27,47 +27,96 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 
 func (h *Handler) ListWorkspaces(w http.ResponseWriter, r *http.Request) {
     // Everyone can list (Viewer included)
-    if _, err := h.getUserId(r); err != nil {
+    userID, err := h.getUserId(r)
+    if err != nil {
         h.respondError(w, http.StatusUnauthorized, "Unauthorized")
         return
     }
     
-    list, _ := h.svc.ListWorkspaces(r.Context())
+    list, _ := h.svc.ListWorkspaces(r.Context(), userID)
     json.NewEncoder(w).Encode(list)
 }
 
 func (h *Handler) CreateWorkspace(w http.ResponseWriter, r *http.Request) {
-    userID, err := h.getUserId(r)
-    if err != nil {
-        h.respondError(w, http.StatusUnauthorized, "Unauthorized")
-        return
-    }
+	userID, err := h.getUserId(r)
+	if err != nil {
+		h.respondError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
 
-    // Owner, Admin, Editor can create
-    if err := h.authSvc.CheckRole(r.Context(), userID, "Owner", "Admin", "Editor"); err != nil {
-        h.respondError(w, http.StatusForbidden, "Insufficient permissions to create workspace")
-        return
-    }
+	// Owner, Admin, Editor can create
+	if err := h.authSvc.CheckRole(r.Context(), userID, "Owner", "Admin", "Editor"); err != nil {
+		h.respondError(w, http.StatusForbidden, "Insufficient permissions to create workspace")
+		return
+	}
 
-    w.WriteHeader(http.StatusCreated)
-    json.NewEncoder(w).Encode(map[string]string{"message": "Workspace created (stub)"})
+	var req struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+		Visibility  string `json:"visibility"`
+		Environment string `json:"environment"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.respondError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	if req.Name == "" {
+		req.Name = "New Workspace"
+	}
+
+	ws, err := h.svc.CreateWorkspace(r.Context(), req.Name, req.Description, req.Environment, req.Visibility, userID)
+	if err != nil {
+		h.respondError(w, http.StatusInternalServerError, "Failed to create workspace: "+err.Error())
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(ws)
 }
 
 func (h *Handler) UpdateWorkspace(w http.ResponseWriter, r *http.Request) {
-    userID, err := h.getUserId(r)
-    if err != nil {
-        h.respondError(w, http.StatusUnauthorized, "Unauthorized")
-        return
-    }
+	userID, err := h.getUserId(r)
+	if err != nil {
+		h.respondError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
 
-    // Owner, Admin, Editor can update
-    if err := h.authSvc.CheckRole(r.Context(), userID, "Owner", "Admin", "Editor"); err != nil {
-        h.respondError(w, http.StatusForbidden, "Insufficient permissions to update workspace")
-        return
-    }
+	// 1. Check Global Admin
+	if err := h.authSvc.CheckRole(r.Context(), userID, "Admin"); err == nil {
+		// Allowed
+	} else {
+		// 2. Check Workspace Membership Role
+		// We need the ID from the URL first, which is extracted below, but we need it now for permission check.
+		// Let's refactor slightly to get ID first.
+		workspaceID := chi.URLParam(r, "id")
+		role, err := h.svc.GetMemberRole(r.Context(), workspaceID, userID)
+		if err != nil {
+			// If error (e.g. not found), deny
+			h.respondError(w, http.StatusForbidden, "Insufficient permissions to update workspace")
+			return
+		}
+		if role != "owner" && role != "editor" {
+			h.respondError(w, http.StatusForbidden, "Insufficient permissions (must be Owner or Editor)")
+			return
+		}
+		// Allowed
+	}
 
-    w.WriteHeader(http.StatusOK)
-    json.NewEncoder(w).Encode(map[string]string{"message": "Workspace updated (stub)"})
+	workspaceID := chi.URLParam(r, "id")
+	var req map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.respondError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	ws, err := h.svc.UpdateWorkspace(r.Context(), workspaceID, req, userID)
+	if err != nil {
+		h.respondError(w, http.StatusInternalServerError, "Failed to update workspace: "+err.Error())
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(ws)
 }
 
 func (h *Handler) DeleteWorkspace(w http.ResponseWriter, r *http.Request) {
@@ -83,8 +132,14 @@ func (h *Handler) DeleteWorkspace(w http.ResponseWriter, r *http.Request) {
         return
     }
 
+    workspaceID := chi.URLParam(r, "id")
+    if err := h.svc.DeleteWorkspace(r.Context(), workspaceID); err != nil {
+        h.respondError(w, http.StatusInternalServerError, "Failed to delete workspace: "+err.Error())
+        return
+    }
+
     w.WriteHeader(http.StatusOK)
-    json.NewEncoder(w).Encode(map[string]string{"message": "Workspace deleted (stub)"})
+    json.NewEncoder(w).Encode(map[string]string{"message": "Workspace deleted"})
 }
 
 func (h *Handler) getUserId(r *http.Request) (string, error) {

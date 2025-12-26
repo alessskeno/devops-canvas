@@ -138,3 +138,11 @@ func (r *Repository) GetUserByID(ctx context.Context, userID string) (*models.Us
 
 	return user, passwordHash, nil
 }
+func (r *Repository) IsSystemConfigured(ctx context.Context) (bool, error) {
+	var count int
+	err := db.Pool.QueryRow(ctx, "SELECT count(*) FROM users").Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}

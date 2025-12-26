@@ -36,9 +36,14 @@ export const useAuthStore = create<AuthState>()(
             isSystemConfigured: false, // New state
 
             checkSystemStatus: async () => {
-                // For MVP, always return true to skip forced admin setup check
-                set({ isSystemConfigured: true });
-                return true;
+                try {
+                    const response = await api.get<{ configured: boolean }>('/auth/system-status');
+                    set({ isSystemConfigured: response.data.configured });
+                    return response.data.configured;
+                } catch (err) {
+                    console.error('Failed to check system status:', err);
+                    return false;
+                }
             },
 
             fetchUser: async () => {

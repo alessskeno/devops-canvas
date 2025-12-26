@@ -6,10 +6,11 @@ import { HighlightedText } from '../shared/HighlightedText';
 interface WorkspaceCardProps {
     workspace: Workspace;
     onClick: () => void;
+    onDelete: () => void;
     highlight?: string;
 }
 
-export function WorkspaceCard({ workspace, onClick, highlight = '' }: WorkspaceCardProps) {
+export function WorkspaceCard({ workspace, onClick, onDelete, highlight = '' }: WorkspaceCardProps) {
     const [isMenuOpen, setIsMenuOpen] = React.useState(false);
     const menuRef = React.useRef<HTMLDivElement>(null);
 
@@ -30,9 +31,22 @@ export function WorkspaceCard({ workspace, onClick, highlight = '' }: WorkspaceC
 
     const handleAction = (e: React.MouseEvent, action: string) => {
         e.stopPropagation();
-        console.log(`Action ${action} on workspace ${workspace.id}`);
         setIsMenuOpen(false);
-        // Implement actual action logic here (delete, duplicate, etc.)
+        switch (action) {
+            case 'open':
+                onClick();
+                break;
+            case 'delete':
+                if (window.confirm('Are you sure you want to delete this workspace?')) {
+                    onDelete();
+                }
+                break;
+            case 'share':
+            case 'duplicate':
+            case 'export':
+                alert(`${action.charAt(0).toUpperCase() + action.slice(1)} feature coming soon!`);
+                break;
+        }
     };
 
     return (
@@ -124,10 +138,12 @@ export function WorkspaceCard({ workspace, onClick, highlight = '' }: WorkspaceC
                 </div>
             </div>
 
-            <div className="border-t border-slate-200 dark:border-slate-800 pt-4 flex items-center justify-between text-xs text-slate-600">
-                <span>v1.2.4</span>
+            <div className="border-t border-slate-200 dark:border-slate-800 pt-4 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                <span className="truncate max-w-[150px]">
+                    {workspace.last_updated_by_name ? `Updated by ${workspace.last_updated_by_name}` : 'Just created'}
+                </span>
                 <span className="flex items-center">
-                    {Math.floor(Math.random() * 4) + 1} cores • {Math.floor(Math.random() * 8) + 2}GB
+                    {new Date(workspace.lastModified || new Date()).toLocaleDateString()}
                 </span>
             </div>
         </div>

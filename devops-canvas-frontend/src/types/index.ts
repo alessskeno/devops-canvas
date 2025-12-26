@@ -17,6 +17,8 @@ export interface Workspace {
     visibility: 'private' | 'team' | 'public';
     componentCount: number;
     lastModified: string;
+    last_updated_by?: string;
+    last_updated_by_name?: string;
 }
 
 export interface NodePort {
