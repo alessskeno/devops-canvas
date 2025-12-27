@@ -140,7 +140,7 @@ function CanvasNodeComponent({ node, scale, isSelected }: CanvasNodeProps) {
             // Complete connection
             if (draftConnection.sourceId !== node.id) {
                 addConnection({
-                    id: `conn-${Date.now()}`,
+                    id: crypto.randomUUID(),
                     source: draftConnection.sourceId,
                     target: node.id,
                     animated: true

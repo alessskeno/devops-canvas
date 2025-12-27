@@ -10,6 +10,8 @@ interface WorkspaceState {
 
     fetchWorkspaces: () => Promise<void>;
     createWorkspace: (data: Omit<Workspace, 'id' | 'componentCount' | 'lastModified'>) => Promise<void>;
+    updateWorkspace: (id: string, data: Partial<Workspace>) => Promise<void>;
+    duplicateWorkspace: (id: string) => Promise<void>;
     deleteWorkspace: (id: string) => Promise<void>;
     selectWorkspace: (id: string) => void;
 }
@@ -40,9 +42,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
                 id: w.id,
                 name: w.name,
                 description: w.description,
-                environment: w.environment || 'development', // Backend default
-                visibility: (w.is_public ? 'public' : 'private') as 'public' | 'private' | 'team',
-                componentCount: 0, // Not yet calculated in backend
+                environment: w.environment || 'development',
+                visibility: w.visibility || 'private', // Backend provides 'visibility' string
+                componentCount: w.componentCount || 0,
+                componentTypes: w.componentTypes || [],
                 lastModified: w.updated_at,
                 last_updated_by: w.last_updated_by,
                 last_updated_by_name: w.last_updated_by_name
@@ -78,6 +81,57 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         } catch (err: any) {
             set({ error: err.message, isLoading: false });
             throw err; // Re-throw to allow component to handle success/fail UI
+        }
+    },
+
+    updateWorkspace: async (id, data) => {
+        set({ isLoading: true });
+        try {
+            const response = await api.put<Workspace>(`/workspaces/${id}`, data);
+            const w: any = response.data;
+            // Update in local state
+            set((state) => ({
+                workspaces: state.workspaces.map(ws => ws.id === id ? {
+                    ...ws,
+                    name: w.name,
+                    description: w.description,
+                    environment: w.environment,
+                    visibility: w.visibility,
+                    lastModified: w.updated_at,
+                    last_updated_by: w.last_updated_by
+                } : ws),
+                isLoading: false
+            }));
+        } catch (err: any) {
+            set({ error: err.message, isLoading: false });
+            throw err;
+        }
+    },
+
+    duplicateWorkspace: async (id) => {
+        set({ isLoading: true });
+        try {
+            const response = await api.post<Workspace>(`/workspaces/${id}/duplicate`);
+            const w: any = response.data;
+            const newWs: Workspace = {
+                id: w.id,
+                name: w.name,
+                description: w.description,
+                environment: w.environment,
+                visibility: w.visibility,
+                componentCount: w.componentCount || 0,
+                componentTypes: w.componentTypes || [],
+                lastModified: w.updated_at,
+                last_updated_by: w.last_updated_by
+            };
+
+            set((state) => ({
+                workspaces: [newWs, ...state.workspaces],
+                isLoading: false
+            }));
+        } catch (err: any) {
+            set({ error: err.message, isLoading: false });
+            throw err;
         }
     },
 

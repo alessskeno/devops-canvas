@@ -44,7 +44,7 @@ export function CanvasArea() {
         });
     };
 
-    const handleWheel = (e: React.WheelEvent) => {
+    const handleWheel = (e: WheelEvent) => {
         e.preventDefault();
         const zoomSensitivity = 0.001;
         const oldScale = scale;
@@ -153,7 +153,7 @@ export function CanvasArea() {
             }
 
             const newNode: NodeType = {
-                id: `node-${Date.now()}`,
+                id: crypto.randomUUID(),
                 type,
                 position: { x, y },
                 data: initialData
@@ -170,11 +170,23 @@ export function CanvasArea() {
     // A robust implementation would use a specialized library or context. 
     // Here we'll just handle the visual temp line.
 
+    // Use useEffect for non-passive wheel listener
+    useEffect(() => {
+        const element = containerRef.current;
+        if (element) {
+            element.addEventListener('wheel', handleWheel, { passive: false });
+        }
+        return () => {
+            if (element) {
+                element.removeEventListener('wheel', handleWheel);
+            }
+        };
+    }, [handleWheel]);
+
     return (
         <div
             ref={containerRef}
             className="flex-1 overflow-hidden relative bg-gray-50 dark:bg-slate-950 grid-bg cursor-default selection:bg-transparent"
-            onWheel={handleWheel}
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}

@@ -6,54 +6,48 @@ import { WorkspaceCard } from './WorkspaceCard';
 import { Button } from '../shared/Button';
 import { Plus, Search, Sun, Moon, LogOut, User as UserIcon } from 'lucide-react';
 import { Input } from '../shared/Input';
-import { Modal } from '../shared/Modal';
+import { WorkspaceModal } from './WorkspaceModal';
 import { Select } from '../shared/Select';
 import { useDarkMode } from '../../hooks/useDarkMode';
+import { Workspace } from '../../types';
 
 
 export function Dashboard() {
     const navigate = useNavigate();
     const { user, logout } = useAuthStore();
-    const { workspaces, fetchWorkspaces, createWorkspace, isLoading } = useWorkspaceStore();
+    const { workspaces, fetchWorkspaces, createWorkspace, updateWorkspace, duplicateWorkspace, deleteWorkspace, isLoading } = useWorkspaceStore();
     const { isDark, toggle } = useDarkMode();
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
+    const [editingWorkspace, setEditingWorkspace] = useState<Workspace | undefined>(undefined);
+
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const dropdownRef = React.useRef<HTMLDivElement>(null);
-
-    // Close dropdown when clicking outside
-    useEffect(() => {
-        function handleClickOutside(event: MouseEvent) {
-            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-                setIsDropdownOpen(false);
-            }
-        }
-        document.addEventListener("mousedown", handleClickOutside);
-        return () => document.removeEventListener("mousedown", handleClickOutside);
-    }, []);
-
-    // Create Modal State
-    const [newWsName, setNewWsName] = useState('');
-    const [newWsDescription, setNewWsDescription] = useState('');
-    const [newWsVisibility, setNewWsVisibility] = useState('private');
-    const [newWsEnv, setNewWsEnv] = useState('development');
 
     useEffect(() => {
         fetchWorkspaces();
     }, [fetchWorkspaces]);
 
-    const handleCreate = async () => {
-        await createWorkspace({
-            name: newWsName,
-            description: newWsDescription,
-            environment: newWsEnv as any,
-            visibility: newWsVisibility as any,
-        });
-        setNewWsName('');
-        setNewWsDescription('');
-        setNewWsVisibility('private');
-        setNewWsEnv('development');
+    const handleModalSubmit = async (data: any) => {
+        if (modalMode === 'create') {
+            await createWorkspace(data);
+        } else if (modalMode === 'edit' && editingWorkspace) {
+            await updateWorkspace(editingWorkspace.id, data);
+        }
         setIsModalOpen(false);
+    };
+
+    const openCreateModal = () => {
+        setModalMode('create');
+        setEditingWorkspace(undefined);
+        setIsModalOpen(true);
+    };
+
+    const openEditModal = (ws: Workspace) => {
+        setModalMode('edit');
+        setEditingWorkspace(ws);
+        setIsModalOpen(true);
     };
 
     return (
@@ -153,7 +147,7 @@ export function Dashboard() {
                     </div>
 
                     <div className="mt-4 md:mt-0">
-                        <Button onClick={() => setIsModalOpen(true)} leftIcon={<Plus size={16} />}>
+                        <Button onClick={openCreateModal} leftIcon={<Plus size={16} />}>
                             Create New Workspace
                         </Button>
                     </div>
@@ -173,6 +167,8 @@ export function Dashboard() {
                                     key={ws.id}
                                     workspace={ws}
                                     onClick={() => navigate(`/workspace/${ws.id}`)}
+                                    onEdit={() => openEditModal(ws)}
+                                    onDuplicate={() => duplicateWorkspace(ws.id)}
                                     onDelete={() => {
                                         useWorkspaceStore.getState().deleteWorkspace(ws.id);
                                     }}
@@ -183,59 +179,14 @@ export function Dashboard() {
                 </div>
             </main>
 
-            {/* Create Modal */}
-            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Create New Workspace">
-                <div className="space-y-4">
-                    <Input
-                        label="Workspace Name"
-                        placeholder="e.g. Production Cluster"
-                        value={newWsName}
-                        onChange={e => setNewWsName(e.target.value)}
-                    />
-
-                    {/* Description Textarea */}
-                    <div>
-                        <label className="block text-xs font-medium text-slate-800 dark:text-slate-400 mb-1.5">
-                            Description
-                        </label>
-                        <textarea
-                            className="flex w-full rounded-md border border-slate-400 bg-white px-3 py-2 text-sm placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow dark:bg-slate-900 dark:border-slate-800 dark:text-white"
-                            rows={3}
-                            placeholder="What is this infrastructure for?"
-                            value={newWsDescription}
-                            onChange={e => setNewWsDescription(e.target.value)}
-                        ></textarea>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                        <Select
-                            label="Environment"
-                            options={[
-                                { value: 'development', label: 'Development' },
-                                { value: 'staging', label: 'Staging' },
-                                { value: 'production', label: 'Production' },
-                            ]}
-                            value={newWsEnv}
-                            onChange={e => setNewWsEnv(e.target.value)}
-                        />
-                        <Select
-                            label="Visibility"
-                            options={[
-                                { value: 'private', label: 'Private' },
-                                { value: 'team', label: 'Team Shared' },
-                                { value: 'public', label: 'Public' },
-                            ]}
-                            value={newWsVisibility}
-                            onChange={e => setNewWsVisibility(e.target.value)}
-                        />
-                    </div>
-
-                    <div className="flex justify-end space-x-3 mt-6">
-                        <Button variant="ghost" onClick={() => setIsModalOpen(false)}>Cancel</Button>
-                        <Button onClick={handleCreate} disabled={!newWsName}>Create Workspace</Button>
-                    </div>
-                </div>
-            </Modal>
+            {/* Workspace Modal (Create/Edit) */}
+            <WorkspaceModal
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                onSubmit={handleModalSubmit}
+                initialData={editingWorkspace}
+                mode={modalMode}
+            />
         </div>
     );
 }

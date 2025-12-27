@@ -3,7 +3,7 @@ import { ComponentLibrary } from './ComponentLibrary';
 import { CanvasArea } from './CanvasArea';
 import { ConfigPanel } from './ConfigPanel';
 import { Toggle } from '../shared/Toggle';
-import { Link, useBlocker } from 'react-router-dom';
+import { Link, useBlocker, useParams } from 'react-router-dom';
 import {
     ArrowLeft, PanelLeft, Sun, Moon, Undo2, Redo2,
     ZoomIn, ZoomOut, Cloud, Upload, Download, Play, CheckCircle2,
@@ -18,8 +18,16 @@ import { ExportModal } from '../modals/ExportModal';
 
 
 export function NodeEditor() {
+    const { id: workspaceId } = useParams<{ id: string }>();
     const { isDark, toggle } = useDarkMode();
-    const { scale, setTransform, pan, undo, redo, past, future, resetView, nodes, connections, loadCanvas, selectedNodeId, duplicateNode, removeNode } = useCanvasStore();
+    const {
+        scale, setTransform, pan,
+        undo, redo, past, future, resetView,
+        nodes, connections,
+        loadCanvas, fetchCanvas, saveCanvas, isSaving,
+        selectedNodeId, duplicateNode, removeNode
+    } = useCanvasStore();
+
     const [sidebarVisible, setSidebarVisible] = useState(() => localStorage.getItem('canvas_sidebar') !== 'false');
     useEffect(() => localStorage.setItem('canvas_sidebar', String(sidebarVisible)), [sidebarVisible]);
 
@@ -58,28 +66,23 @@ export function NodeEditor() {
         }
     }, [blocker.state]);
 
-    // Load from LocalStorage on Mount
+    // Load from Backend on Mount
     useEffect(() => {
-        const savedData = localStorage.getItem('devops_canvas_workspace');
-        if (savedData) {
-            try {
-                const parsed = JSON.parse(savedData);
-                if (parsed.nodes) {
-                    loadCanvas(parsed.nodes, parsed.connections || []);
-                    if (parsed.lastSaved) {
-                        setLastSaved(new Date(parsed.lastSaved));
-                    }
-                    // Reset unsaved changes after load to prevent immediate tracking
-                    setTimeout(() => setHasUnsavedChanges(false), 100);
-                }
-            } catch (e) {
-                console.error("Failed to load workspace from local storage", e);
-            }
+        if (workspaceId) {
+            fetchCanvas(workspaceId).then(() => {
+                // Reset unsaved changes after load
+                setTimeout(() => {
+                    setHasUnsavedChanges(false);
+                    isFirstRender.current = true; // Reset first render tracker so initial population doesn't trigger dirty state
+                }, 100);
+            });
         }
-    }, [loadCanvas]);
+    }, [workspaceId, fetchCanvas]);
 
     // Save Function
-    const saveWorkspace = () => {
+    const saveWorkspace = async () => {
+        if (!workspaceId) return;
+
         if (autoSaveTimerRef.current) {
             clearTimeout(autoSaveTimerRef.current);
             autoSaveTimerRef.current = null;
@@ -87,21 +90,18 @@ export function NodeEditor() {
 
         setIsAutoSaving(true);
 
-        // Simulate a small network/processing delay for visual feedback
-        setTimeout(() => {
+        try {
+            await saveCanvas(workspaceId);
             const now = new Date();
-            const data = {
-                nodes,
-                connections,
-                lastSaved: now.toISOString()
-            };
-            localStorage.setItem('devops_canvas_workspace', JSON.stringify(data));
-
             setLastSaved(now);
             setHasUnsavedChanges(false);
             setIsAutoSaving(false);
             toast.success('Workspace saved');
-        }, 600);
+        } catch (error) {
+            console.error(error);
+            setIsAutoSaving(false);
+            toast.error('Failed to save workspace');
+        }
     };
 
     // Track Changes

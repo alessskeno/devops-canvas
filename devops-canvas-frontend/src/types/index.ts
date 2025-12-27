@@ -19,6 +19,7 @@ export interface Workspace {
     lastModified: string;
     last_updated_by?: string;
     last_updated_by_name?: string;
+    componentTypes?: string[];
 }
 
 export interface NodePort {

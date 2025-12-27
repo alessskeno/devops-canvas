@@ -44,9 +44,15 @@ interface CanvasState {
 
     undo: () => void;
     redo: () => void;
+
+    // Persistence
+    isLoading: boolean;
+    isSaving: boolean;
+    fetchCanvas: (workspaceId: string) => Promise<void>;
+    saveCanvas: (workspaceId: string) => Promise<void>;
 }
 
-export const useCanvasStore = create<CanvasState>((set) => ({
+export const useCanvasStore = create<CanvasState>((set, get) => ({
     nodes: [],
     connections: [],
     selectedNodeId: null,
@@ -79,7 +85,7 @@ export const useCanvasStore = create<CanvasState>((set) => ({
 
         const newNode: CanvasNode = {
             ...nodeToDuplicate,
-            id: `node-${Date.now()}`,
+            id: crypto.randomUUID(),
             position: {
                 x: nodeToDuplicate.position.x + 50,
                 y: nodeToDuplicate.position.y + 50
@@ -186,4 +192,62 @@ export const useCanvasStore = create<CanvasState>((set) => ({
             connections: next.connections
         };
     }),
+
+    isLoading: false,
+    isSaving: false,
+
+    fetchCanvas: async (workspaceId: string) => {
+        set({ isLoading: true });
+        try {
+            const { default: api } = await import('../utils/api');
+            const response = await api.get(`/workspaces/${workspaceId}/canvas`);
+
+            const { nodes, connections } = response.data;
+
+            // Transform backend flat structure (position_x, position_y) to frontend nested structure (position: {x, y})
+            const mappedNodes = (nodes || []).map((n: any) => ({
+                ...n,
+                position: {
+                    x: n.position_x !== undefined ? n.position_x : (n.position?.x || 0),
+                    y: n.position_y !== undefined ? n.position_y : (n.position?.y || 0)
+                }
+            }));
+
+            set({
+                nodes: mappedNodes,
+                connections: connections || [],
+                past: [],
+                future: [],
+                isLoading: false
+            });
+        } catch (error) {
+            console.error('Failed to fetch canvas:', error);
+            set({ isLoading: false });
+        }
+    },
+
+    saveCanvas: async (workspaceId: string) => {
+        set({ isSaving: true });
+        try {
+            const { nodes, connections } = get();
+            const { default: api } = await import('../utils/api');
+
+            // Transform frontend nested structure to backend flat structure
+            const payloadNodes = nodes.map(n => ({
+                ...n,
+                position_x: n.position.x,
+                position_y: n.position.y
+            }));
+
+            await api.put(`/workspaces/${workspaceId}/canvas`, {
+                nodes: payloadNodes,
+                connections
+            });
+            set({ isSaving: false });
+        } catch (error) {
+            console.error('Failed to save canvas:', error);
+            set({ isSaving: false });
+            throw error;
+        }
+    },
 }));

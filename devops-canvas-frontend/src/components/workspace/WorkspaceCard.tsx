@@ -1,16 +1,33 @@
 import React from 'react';
 import { Workspace } from '../../types';
-import { MoreVertical, Layers, Server, Activity, ArrowRight, ExternalLink, Share2, Copy, Trash2, Download } from 'lucide-react';
+import { MoreVertical, Layers, Server, Activity, ArrowRight, ExternalLink, Share2, Copy, Trash2, Download, Edit, Database, Box, HardDrive, BarChart2, Bell, FileText } from 'lucide-react';
 import { HighlightedText } from '../shared/HighlightedText';
+import { getComponentByType } from '../../utils/componentRegistry';
+
+// ... (IconMap definition)
+const IconMap: Record<string, any> = {
+    'Container': Box,
+    'Database': Database,
+    'Layers': Layers,
+    'Activity': Activity,
+    'Server': Server,
+    'HardDrive': HardDrive,
+    'BarChart': BarChart2,
+    'Bell': Bell,
+    'FileText': FileText
+};
 
 interface WorkspaceCardProps {
     workspace: Workspace;
     onClick: () => void;
     onDelete: () => void;
+    onEdit: () => void;
+    onDuplicate: () => void;
     highlight?: string;
 }
 
-export function WorkspaceCard({ workspace, onClick, onDelete, highlight = '' }: WorkspaceCardProps) {
+export function WorkspaceCard({ workspace, onClick, onDelete, onEdit, onDuplicate, highlight = '' }: WorkspaceCardProps) {
+    // ... (existing state and handlers)
     const [isMenuOpen, setIsMenuOpen] = React.useState(false);
     const menuRef = React.useRef<HTMLDivElement>(null);
 
@@ -36,18 +53,29 @@ export function WorkspaceCard({ workspace, onClick, onDelete, highlight = '' }: 
             case 'open':
                 onClick();
                 break;
+            case 'edit':
+                onEdit();
+                break;
+            case 'duplicate':
+                onDuplicate();
+                break;
             case 'delete':
                 if (window.confirm('Are you sure you want to delete this workspace?')) {
                     onDelete();
                 }
                 break;
             case 'share':
-            case 'duplicate':
             case 'export':
                 alert(`${action.charAt(0).toUpperCase() + action.slice(1)} feature coming soon!`);
                 break;
         }
     };
+
+    // Prepare Icons
+    const componentTypes = workspace.componentTypes || [];
+    const displayedTypes = componentTypes.slice(0, 3);
+    const remainingCount = workspace.componentCount - 3;
+    const showPlusBadge = remainingCount > 0;
 
     return (
         <div
@@ -91,13 +119,17 @@ export function WorkspaceCard({ workspace, onClick, onDelete, highlight = '' }: 
                                 <ExternalLink size={14} className="mr-3 text-slate-500" />
                                 Open
                             </button>
-                            <button onClick={(e) => handleAction(e, 'share')} className="flex items-center w-full px-4 py-2 text-sm text-slate-800 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/50">
-                                <Share2 size={14} className="mr-3 text-slate-500" />
-                                Share
+                            <button onClick={(e) => handleAction(e, 'edit')} className="flex items-center w-full px-4 py-2 text-sm text-slate-800 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/50">
+                                <Edit size={14} className="mr-3 text-slate-500" />
+                                Edit
                             </button>
                             <button onClick={(e) => handleAction(e, 'duplicate')} className="flex items-center w-full px-4 py-2 text-sm text-slate-800 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/50">
                                 <Copy size={14} className="mr-3 text-slate-500" />
                                 Duplicate
+                            </button>
+                            <button onClick={(e) => handleAction(e, 'share')} className="flex items-center w-full px-4 py-2 text-sm text-slate-800 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/50">
+                                <Share2 size={14} className="mr-3 text-slate-500" />
+                                Share
                             </button>
                             <button onClick={(e) => handleAction(e, 'export')} className="flex items-center w-full px-4 py-2 text-sm text-slate-800 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/50">
                                 <Download size={14} className="mr-3 text-slate-500" />
@@ -121,20 +153,31 @@ export function WorkspaceCard({ workspace, onClick, onDelete, highlight = '' }: 
             </p>
 
             <div className="flex items-center mb-4 pl-2">
-                {/* Mock icons representing stack - Overlapping (Static) */}
                 <div className="flex items-center -space-x-3">
-                    <div className="h-8 w-8 rounded-full bg-gray-100 dark:bg-slate-800 border-2 border-white dark:border-slate-900 flex items-center justify-center text-xs text-slate-600 dark:text-slate-500 relative z-0">
-                        <Layers size={16} className="text-blue-500" />
-                    </div>
-                    <div className="h-8 w-8 rounded-full bg-gray-100 dark:bg-slate-800 border-2 border-white dark:border-slate-900 flex items-center justify-center text-xs text-slate-600 dark:text-slate-500 relative z-10">
-                        <Server size={16} className="text-purple-500" />
-                    </div>
-                    <div className="h-8 w-8 rounded-full bg-gray-100 dark:bg-slate-800 border-2 border-white dark:border-slate-900 flex items-center justify-center text-xs text-slate-600 dark:text-slate-500 relative z-20">
-                        <Activity size={16} className="text-orange-500" />
-                    </div>
-                    <div className="h-8 w-8 rounded-full bg-gray-100 dark:bg-slate-800 border-2 border-white dark:border-slate-900 flex items-center justify-center text-xs text-slate-600 dark:text-slate-500 relative z-30">
-                        +{workspace.componentCount}
-                    </div>
+                    {displayedTypes.length > 0 ? (
+                        displayedTypes.map((type, index) => {
+                            const def = getComponentByType(type);
+                            const iconName = def?.icon || 'Server';
+                            const IconComponent = IconMap[iconName] || Server;
+                            const colorClass = def?.color?.split(' ')[0] || 'text-slate-600'; // extracting text-color part simplistic way or just use def.color
+
+                            return (
+                                <div key={type} className="h-8 w-8 rounded-full bg-gray-100 dark:bg-slate-800 border-2 border-white dark:border-slate-900 flex items-center justify-center text-xs relative z-[${30-index*10}]" title={def?.name || type}>
+                                    <IconComponent size={16} className={def?.color ? def.color.split(' ')[0] : 'text-slate-500'} />
+                                </div>
+                            );
+                        })
+                    ) : (
+                        <div className="h-8 w-8 rounded-full bg-gray-100 dark:bg-slate-800 border-2 border-white dark:border-slate-900 flex items-center justify-center text-xs text-slate-400 relative z-30" title="Empty Workspace">
+                            <Box size={16} />
+                        </div>
+                    )}
+
+                    {showPlusBadge && (
+                        <div className="h-8 w-8 rounded-full bg-slate-200 dark:bg-slate-700 border-2 border-white dark:border-slate-900 flex items-center justify-center text-[10px] font-bold text-slate-600 dark:text-slate-300 relative z-0">
+                            +{remainingCount}
+                        </div>
+                    )}
                 </div>
             </div>
 
