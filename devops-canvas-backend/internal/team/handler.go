@@ -145,19 +145,23 @@ func (h *Handler) RemoveMember(w http.ResponseWriter, r *http.Request) {
         return
     }
 
+    allowed := false
     targetUser, err := h.authSvc.GetUser(r.Context(), memberID)
     if err != nil {
-        h.respondError(w, http.StatusNotFound, "Member not found")
-        return
-    }
-
-    allowed := false
-    if currentUser.Role == "Owner" {
-        allowed = true
-    } else if currentUser.Role == "Admin" {
-        // Admin can remove Editor/Viewer, but not Owner or Admin
-        if targetUser.Role != "Owner" && targetUser.Role != "Admin" {
+        // Target not found as a User. Likely an Invitation.
+        // Owners and Admins can remove invitations.
+        if currentUser.Role == "Owner" || currentUser.Role == "Admin" {
             allowed = true
+        }
+    } else {
+        // Target is a User
+        if currentUser.Role == "Owner" {
+            allowed = true
+        } else if currentUser.Role == "Admin" {
+            // Admin can remove Editor/Viewer, but not Owner or Admin
+            if targetUser.Role != "Owner" && targetUser.Role != "Admin" {
+                allowed = true
+            }
         }
     }
 

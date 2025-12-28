@@ -60,9 +60,7 @@ export function WorkspaceCard({ workspace, onClick, onDelete, onEdit, onDuplicat
                 onDuplicate();
                 break;
             case 'delete':
-                if (window.confirm('Are you sure you want to delete this workspace?')) {
-                    onDelete();
-                }
+                onDelete();
                 break;
             case 'share':
             case 'export':

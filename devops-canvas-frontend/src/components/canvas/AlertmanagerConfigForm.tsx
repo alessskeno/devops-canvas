@@ -45,7 +45,7 @@ export function AlertmanagerConfigForm({ config, onChange, readOnly }: Props) {
     const generatedYaml = generateAlertmanagerConfig(safeConfig);
 
     return (
-        <div className="flex flex-col h-full space-y-4">
+        <div className="flex flex-col space-y-4">
             <div className="space-y-4 p-1">
                 <Select
                     label="Destination"
@@ -98,7 +98,7 @@ export function AlertmanagerConfigForm({ config, onChange, readOnly }: Props) {
                 )}
             </div>
 
-            <div className="flex-1 flex flex-col min-h-0 border-t border-slate-200 dark:border-slate-800 pt-4">
+            <div className="border-t border-slate-200 dark:border-slate-800 pt-4">
                 <div className="flex justify-between items-center mb-2">
                     <span className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1">
                         <Eye size={12} /> Preview (alertmanager.yaml)
@@ -110,7 +110,7 @@ export function AlertmanagerConfigForm({ config, onChange, readOnly }: Props) {
                         <Copy size={12} className="mr-1" /> Copy
                     </Button>
                 </div>
-                <div className="flex-1 relative">
+                <div className="relative h-64">
                     <pre className="absolute inset-0 p-3 rounded border border-slate-300 dark:border-slate-700 bg-slate-900 text-slate-50 font-mono text-[10px] overflow-auto whitespace-pre">
                         {generatedYaml}
                     </pre>

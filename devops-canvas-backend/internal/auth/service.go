@@ -153,6 +153,12 @@ func (s *Service) ParseToken(tokenString string) (string, error) {
 	}
 
 	sub, _ := claims["sub"].(string)
+
+	// Verify user exists in DB to prevent deleted users from accessing
+	if _, _, err := s.repo.GetUserByID(context.Background(), sub); err != nil {
+		return "", errors.New("user not found or invalid")
+	}
+
 	return sub, nil
 }
 

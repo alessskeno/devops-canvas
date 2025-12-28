@@ -15,7 +15,7 @@ func NewRepository() *Repository {
 func (r *Repository) ListWorkspaces(ctx context.Context, userID string) ([]models.Workspace, error) {
 	query := `
 		SELECT 
-            w.id, w.name, w.description, w.owner_id, w.last_updated_by, u.name as last_updated_by_name, w.environment, w.visibility, w.created_at, w.updated_at,
+            w.id, w.name, w.description, w.owner_id, w.last_updated_by, u.name as last_updated_by_name, w.environment, w.visibility, w.version, w.created_at, w.updated_at,
             COALESCE(
                 (SELECT ARRAY_AGG(DISTINCT type) FROM nodes WHERE workspace_id = w.id),
                 ARRAY[]::text[]
@@ -41,7 +41,7 @@ func (r *Repository) ListWorkspaces(ctx context.Context, userID string) ([]model
 		var w models.Workspace
 		var lastUpdatedBy *string
 		var lastUpdatedByName *string
-		if err := rows.Scan(&w.ID, &w.Name, &w.Description, &w.OwnerID, &lastUpdatedBy, &lastUpdatedByName, &w.Environment, &w.Visibility, &w.CreatedAt, &w.UpdatedAt, &w.ComponentTypes, &w.ComponentCount); err != nil {
+		if err := rows.Scan(&w.ID, &w.Name, &w.Description, &w.OwnerID, &lastUpdatedBy, &lastUpdatedByName, &w.Environment, &w.Visibility, &w.Version, &w.CreatedAt, &w.UpdatedAt, &w.ComponentTypes, &w.ComponentCount); err != nil {
 			return nil, err
 		}
 		w.LastUpdatedBy = lastUpdatedBy
@@ -62,8 +62,8 @@ func (r *Repository) CreateWorkspace(ctx context.Context, ws models.Workspace) (
 
 	// 1. Create Workspace
 	query := `
-		INSERT INTO workspaces (name, description, owner_id, last_updated_by, environment, visibility)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO workspaces (name, description, owner_id, last_updated_by, environment, visibility, version)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING id, created_at, updated_at
 	`
 	// Fallback defaults if empty
@@ -73,8 +73,11 @@ func (r *Repository) CreateWorkspace(ctx context.Context, ws models.Workspace) (
 	if ws.Visibility == "" {
 		ws.Visibility = "private"
 	}
+    if ws.Version == "" {
+        ws.Version = "v0.1.0"
+    }
 
-	err = tx.QueryRow(ctx, query, ws.Name, ws.Description, ws.OwnerID, ws.LastUpdatedBy, ws.Environment, ws.Visibility).
+	err = tx.QueryRow(ctx, query, ws.Name, ws.Description, ws.OwnerID, ws.LastUpdatedBy, ws.Environment, ws.Visibility, ws.Version).
 		Scan(&ws.ID, &ws.CreatedAt, &ws.UpdatedAt)
 	if err != nil {
 		return nil, err
@@ -106,22 +109,24 @@ func (r *Repository) UpdateWorkspace(ctx context.Context, id string, data map[st
 		    description = COALESCE($3, description),
             environment = COALESCE($4, environment),
             visibility = COALESCE($5, visibility),
-			last_updated_by = $6,
+            version = COALESCE($6, version),
+			last_updated_by = $7,
 			updated_at = NOW()
 		WHERE id = $1
-		RETURNING id, name, description, owner_id, last_updated_by, environment, visibility, created_at, updated_at
+		RETURNING id, name, description, owner_id, last_updated_by, environment, visibility, version, created_at, updated_at
 	`
 	
 	name, _ := data["name"].(string)
 	desc, _ := data["description"].(string)
     env, _ := data["environment"].(string)
     vis, _ := data["visibility"].(string)
+    ver, _ := data["version"].(string)
 	lastUpdatedBy, _ := data["last_updated_by"].(string)
 
 	var ws models.Workspace
 	var lud *string
-	err := db.Pool.QueryRow(ctx, query, id, name, desc, env, vis, lastUpdatedBy).
-		Scan(&ws.ID, &ws.Name, &ws.Description, &ws.OwnerID, &lud, &ws.Environment, &ws.Visibility, &ws.CreatedAt, &ws.UpdatedAt)
+	err := db.Pool.QueryRow(ctx, query, id, name, desc, env, vis, ver, lastUpdatedBy).
+		Scan(&ws.ID, &ws.Name, &ws.Description, &ws.OwnerID, &lud, &ws.Environment, &ws.Visibility, &ws.Version, &ws.CreatedAt, &ws.UpdatedAt)
 	
 	if err != nil {
 		return nil, err
@@ -168,16 +173,16 @@ func (r *Repository) DuplicateWorkspace(ctx context.Context, sourceID, newName, 
 
 	// 1. Copy Workspace
 	query := `
-		INSERT INTO workspaces (name, description, config_json, environment, visibility, owner_id, last_updated_by)
-		SELECT $2, description, config_json, environment, visibility, $3, $3
+		INSERT INTO workspaces (name, description, config_json, environment, visibility, version, owner_id, last_updated_by)
+		SELECT $2, description, config_json, environment, visibility, version, $3, $3
 		FROM workspaces
 		WHERE id = $1
-		RETURNING id, name, description, environment, visibility, created_at, updated_at
+		RETURNING id, name, description, environment, visibility, version, created_at, updated_at
 	`
 	
 	var ws models.Workspace
 	err = tx.QueryRow(ctx, query, sourceID, newName, userID).
-		Scan(&ws.ID, &ws.Name, &ws.Description, &ws.Environment, &ws.Visibility, &ws.CreatedAt, &ws.UpdatedAt)
+		Scan(&ws.ID, &ws.Name, &ws.Description, &ws.Environment, &ws.Visibility, &ws.Version, &ws.CreatedAt, &ws.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -423,7 +428,7 @@ func (r *Repository) GetCanvas(ctx context.Context, workspaceID string) (*models
 
 func (r *Repository) GetWorkspace(ctx context.Context, id string) (*models.Workspace, error) {
 	query := `
-		SELECT id, name, description, owner_id, last_updated_by, environment, visibility, created_at, updated_at
+		SELECT id, name, description, owner_id, last_updated_by, environment, visibility, version, created_at, updated_at
 		FROM workspaces
 		WHERE id = $1
 	`
@@ -431,7 +436,7 @@ func (r *Repository) GetWorkspace(ctx context.Context, id string) (*models.Works
 	var lastUpdatedBy *string
 	err := db.Pool.QueryRow(ctx, query, id).Scan(
 		&ws.ID, &ws.Name, &ws.Description, &ws.OwnerID, &lastUpdatedBy, 
-		&ws.Environment, &ws.Visibility, &ws.CreatedAt, &ws.UpdatedAt,
+		&ws.Environment, &ws.Visibility, &ws.Version, &ws.CreatedAt, &ws.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err

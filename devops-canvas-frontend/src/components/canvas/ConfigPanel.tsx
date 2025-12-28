@@ -4,7 +4,7 @@ import { Button } from '../shared/Button';
 import { Input } from '../shared/Input';
 import { Select } from '../shared/Select';
 import { Toggle } from '../shared/Toggle';
-import { X, Trash2, Copy } from 'lucide-react';
+import { X, Trash2, Copy, ChevronDown, ChevronRight } from 'lucide-react';
 import { COMPONENT_REGISTRY } from '../../utils/componentRegistry';
 import { COMPONENT_CONFIG_SCHEMAS, ConfigField } from '../../utils/componentConfigSchemas';
 import { KindClusterConfigForm } from './KindClusterConfigForm';
@@ -15,6 +15,8 @@ export function ConfigPanel() {
         selectedNodeId, nodes, connections, updateNodeData, removeNode, selectNode,
         activePanelTab, setActivePanelTab
     } = useCanvasStore();
+
+    const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
 
     // Default to 'General' if undefined
     const currentTab = activePanelTab || 'General';
@@ -30,6 +32,72 @@ export function ConfigPanel() {
     const handleChange = (key: string, value: any) => {
         updateNodeData(selectedNode.id, { [key]: value });
     };
+
+    const renderConfigField = (field: ConfigField) => (
+        <div key={field.key} className="mb-3">
+            {field.type === 'select' ? (
+                <Select
+                    label={field.label}
+                    value={selectedNode.data[field.key] || field.defaultValue || ''}
+                    onChange={(e) => handleChange(field.key, e.target.value)}
+                    options={field.options || []}
+                    disabled={isLocked}
+                />
+            ) : field.type === 'textarea' ? (
+                <div>
+                    <label className="block text-xs font-medium text-slate-800 dark:text-slate-400 mb-1.5">
+                        {field.label}
+                    </label>
+                    <textarea
+                        className="flex w-full rounded-md border border-slate-400 bg-white px-3 py-2 text-sm placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow dark:bg-slate-900 dark:border-slate-800 dark:text-white"
+                        rows={4}
+                        placeholder={field.placeholder}
+                        value={selectedNode.data[field.key] || ''}
+                        onChange={(e) => handleChange(field.key, e.target.value)}
+                        disabled={isLocked}
+                    />
+                </div>
+            ) : field.type === 'boolean' ? (
+                <div className="flex items-center justify-between py-1">
+                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{field.label}</span>
+                    <Toggle
+                        checked={selectedNode.data[field.key] !== undefined ? selectedNode.data[field.key] : field.defaultValue}
+                        onChange={(v) => handleChange(field.key, v)}
+                        disabled={isLocked}
+                    />
+                </div>
+            ) : field.type === 'node-select' ? (
+                <Select
+                    label={field.label}
+                    value={selectedNode.data[field.key] || ''}
+                    onChange={(e) => handleChange(field.key, e.target.value)}
+                    options={[
+                        { label: 'Select a connected node...', value: '' },
+                        ...nodes
+                            .filter(n => {
+                                const isCorrectType = n.type === field.nodeType;
+                                const isConnected = connections.some(conn =>
+                                    (conn.source === selectedNode.id && conn.target === n.id) ||
+                                    (conn.target === selectedNode.id && conn.source === n.id)
+                                );
+                                return isCorrectType && isConnected;
+                            })
+                            .map(n => ({ label: `${n.data.label} (${n.id.slice(0, 4)})`, value: n.id }))
+                    ]}
+                    disabled={isLocked}
+                />
+            ) : (
+                <Input
+                    label={field.label}
+                    type={field.type === 'password' ? 'password' : field.type === 'number' ? 'number' : 'text'}
+                    placeholder={field.placeholder}
+                    value={selectedNode.data[field.key] !== undefined ? selectedNode.data[field.key] : field.defaultValue || ''}
+                    onChange={(e) => handleChange(field.key, field.type === 'number' ? parseFloat(e.target.value) : e.target.value)}
+                    disabled={isLocked}
+                />
+            )}
+        </div>
+    );
 
     return (
         <div className="w-80 h-full flex flex-col bg-slate-50 dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800">
@@ -154,71 +222,47 @@ export function ConfigPanel() {
                             />
                         ) : COMPONENT_CONFIG_SCHEMAS[selectedNode.type] ? (
                             <div className="space-y-4">
-                                {COMPONENT_CONFIG_SCHEMAS[selectedNode.type].map((field: ConfigField) => (
-                                    <div key={field.key}>
-                                        {field.type === 'select' ? (
-                                            <Select
-                                                label={field.label}
-                                                value={selectedNode.data[field.key] || field.defaultValue || ''}
-                                                onChange={(e) => handleChange(field.key, e.target.value)}
-                                                options={field.options || []}
-                                                disabled={isLocked}
-                                            />
-                                        ) : field.type === 'textarea' ? (
-                                            <div>
-                                                <label className="block text-xs font-medium text-slate-800 dark:text-slate-400 mb-1.5">
-                                                    {field.label}
-                                                </label>
-                                                <textarea
-                                                    className="flex w-full rounded-md border border-slate-400 bg-white px-3 py-2 text-sm placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow dark:bg-slate-900 dark:border-slate-800 dark:text-white"
-                                                    rows={4}
-                                                    placeholder={field.placeholder}
-                                                    value={selectedNode.data[field.key] || ''}
-                                                    onChange={(e) => handleChange(field.key, e.target.value)}
-                                                    disabled={isLocked}
-                                                />
-                                            </div>
-                                        ) : field.type === 'boolean' ? (
-                                            <div className="flex items-center justify-between py-1">
-                                                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{field.label}</span>
-                                                <Toggle
-                                                    checked={selectedNode.data[field.key] !== undefined ? selectedNode.data[field.key] : field.defaultValue}
-                                                    onChange={(v) => handleChange(field.key, v)}
-                                                    disabled={isLocked}
-                                                />
-                                            </div>
-                                        ) : field.type === 'node-select' ? (
-                                            <Select
-                                                label={field.label}
-                                                value={selectedNode.data[field.key] || ''}
-                                                onChange={(e) => handleChange(field.key, e.target.value)}
-                                                options={[
-                                                    { label: 'Select a connected node...', value: '' },
-                                                    ...nodes
-                                                        .filter(n => {
-                                                            const isCorrectType = n.type === field.nodeType;
-                                                            const isConnected = connections.some(conn =>
-                                                                (conn.source === selectedNode.id && conn.target === n.id) ||
-                                                                (conn.target === selectedNode.id && conn.source === n.id)
-                                                            );
-                                                            return isCorrectType && isConnected;
-                                                        })
-                                                        .map(n => ({ label: `${n.data.label} (${n.id.slice(0, 4)})`, value: n.id }))
-                                                ]}
-                                                disabled={isLocked}
-                                            />
-                                        ) : (
-                                            <Input
-                                                label={field.label}
-                                                type={field.type === 'password' ? 'password' : field.type === 'number' ? 'number' : 'text'}
-                                                placeholder={field.placeholder}
-                                                value={selectedNode.data[field.key] !== undefined ? selectedNode.data[field.key] : field.defaultValue || ''}
-                                                onChange={(e) => handleChange(field.key, field.type === 'number' ? parseFloat(e.target.value) : e.target.value)}
-                                                disabled={isLocked}
-                                            />
-                                        )}
-                                    </div>
-                                ))}
+                                {(() => {
+                                    const schema = COMPONENT_CONFIG_SCHEMAS[selectedNode.type];
+                                    const groups = schema.reduce((acc, field) => {
+                                        const group = field.group || 'General';
+                                        if (!acc[group]) acc[group] = [];
+                                        acc[group].push(field);
+                                        return acc;
+                                    }, {} as Record<string, ConfigField[]>);
+
+                                    const groupKeys = Object.keys(groups);
+                                    const isGrouped = groupKeys.length > 1 || (groupKeys.length === 1 && groupKeys[0] !== 'General');
+
+                                    if (!isGrouped) return schema.map(renderConfigField);
+
+                                    return groupKeys.map(group => (
+                                        <div key={group} className="border border-slate-200 dark:border-slate-800 rounded-md overflow-hidden mb-2">
+                                            <button
+                                                onClick={() => setExpandedGroups(prev => ({ ...prev, [group]: !prev[group] }))}
+                                                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 flex items-center justify-between text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                                            >
+                                                <span>{group}</span>
+                                                {expandedGroups[group] ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                            </button>
+                                            {expandedGroups[group] && (
+                                                <div className="p-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800">
+                                                    {groups[group].map(renderConfigField)}
+                                                    {group === 'Alertmanager' && selectedNode.type === 'monitoring_stack' && (
+                                                        <div className="mt-4 border-t border-slate-100 dark:border-slate-800 pt-4">
+                                                            <div className="text-xs font-semibold text-slate-500 uppercase mb-3 px-1">Detailed Config</div>
+                                                            <AlertmanagerConfigForm
+                                                                config={selectedNode.data.alertmanagerConfig || { destination: 'discord' }}
+                                                                onChange={(newConfig) => handleChange('alertmanagerConfig', newConfig)}
+                                                                readOnly={isLocked}
+                                                            />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ));
+                                })()}
                                 <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded text-xs text-blue-600 dark:text-blue-400 mt-4">
                                     Configure parameters specific to {selectedNode.type}.
                                 </div>

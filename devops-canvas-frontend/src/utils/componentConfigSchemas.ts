@@ -7,6 +7,7 @@ export interface ConfigField {
     defaultValue?: any;
     placeholder?: string;
     helpText?: string;
+    group?: string; // For grouping fields into tabs/accordions
 }
 
 export const COMPONENT_CONFIG_SCHEMAS: Record<string, ConfigField[]> = {
@@ -127,7 +128,15 @@ export const COMPONENT_CONFIG_SCHEMAS: Record<string, ConfigField[]> = {
         { key: 'max_length_bytes', label: 'Max Length (Bytes)', type: 'text' },
         { key: 'message_ttl', label: 'Message TTL (ms)', type: 'number' }
     ],
-    'kind-cluster': [],
+    'kind-cluster': [
+        {
+            key: 'kindConfig.advancedConfigNodeId',
+            label: 'Advanced Configuration (File)',
+            type: 'node-select',
+            nodeType: 'file',
+            placeholder: 'Select a Config File Node'
+        }
+    ],
     'prometheus': [
         { key: 'port', label: 'Port', type: 'number', defaultValue: 9090 },
         { key: 'retention', label: 'Retention Period', type: 'text', defaultValue: '15d' },
@@ -172,6 +181,40 @@ export const COMPONENT_CONFIG_SCHEMAS: Record<string, ConfigField[]> = {
         { key: 'admin_user', label: 'Admin User', type: 'text', defaultValue: 'admin' },
         { key: 'admin_password', label: 'Admin Password', type: 'password' },
         { key: 'allow_sign_up', label: 'Allow Sign Up', type: 'boolean', defaultValue: false }
+    ],
+    'monitoring_stack': [
+        // Prometheus Group
+        { key: 'prometheus_port', label: 'Port', type: 'number', defaultValue: 9090, group: 'Prometheus' },
+        { key: 'prometheus_retention', label: 'Retention Period', type: 'text', defaultValue: '15d', placeholder: 'e.g. 15d', group: 'Prometheus' },
+        { key: 'prometheus_scrape_interval', label: 'Scrape Interval', type: 'text', defaultValue: '15s', group: 'Prometheus' },
+        { key: 'prometheus_scrape_timeout', label: 'Scrape Timeout', type: 'text', defaultValue: '10s', group: 'Prometheus' },
+        { key: 'prometheus_evaluation_interval', label: 'Evaluation Interval', type: 'text', defaultValue: '15s', group: 'Prometheus' },
+        {
+            key: 'prometheus_scrape_configs',
+            label: 'Scrape Configs File',
+            type: 'node-select',
+            nodeType: 'file',
+            placeholder: 'Select a Config File Node',
+            group: 'Prometheus'
+        },
+        {
+            key: 'prometheus_rules_files',
+            label: 'Rules Files',
+            type: 'node-select',
+            nodeType: 'file',
+            placeholder: 'Select a Config File Node',
+            group: 'Prometheus'
+        },
+
+        // Alertmanager Group
+        { key: 'alertmanager_port', label: 'Port', type: 'number', defaultValue: 9093, group: 'Alertmanager' },
+        { key: 'alertmanager_retention', label: 'Retention', type: 'text', defaultValue: '120h', group: 'Alertmanager' },
+
+        // Grafana Group
+        { key: 'grafana_port', label: 'Port', type: 'number', defaultValue: 3000, group: 'Grafana' },
+        { key: 'grafana_admin_user', label: 'Admin User', type: 'text', defaultValue: 'admin', group: 'Grafana' },
+        { key: 'grafana_admin_password', label: 'Admin Password', type: 'password', group: 'Grafana' },
+        { key: 'grafana_allow_sign_up', label: 'Allow Sign Up', type: 'boolean', defaultValue: false, group: 'Grafana' }
     ],
     'file': [
         { key: 'filename', label: 'Filename', type: 'text', defaultValue: 'config.yaml' },

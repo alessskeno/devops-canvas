@@ -29,7 +29,8 @@ CREATE TABLE IF NOT EXISTS workspaces (
     config_json JSONB DEFAULT '{}',
     last_updated_by UUID REFERENCES users(id),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    version VARCHAR(50) DEFAULT 'v0.1.0'
 );
 CREATE TABLE IF NOT EXISTS workspace_members (
     workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE,

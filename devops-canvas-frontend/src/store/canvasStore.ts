@@ -1,5 +1,43 @@
 import { create } from 'zustand';
 import { CanvasNode, Connection, ComponentConfig } from '../types';
+import { COMPONENT_CONFIG_SCHEMAS } from '../utils/componentConfigSchemas';
+
+// Helper to remove connection references from node data
+const cleanupNodeConnection = (node: CanvasNode, detachedNodeId: string): CanvasNode => {
+    const schema = COMPONENT_CONFIG_SCHEMAS[node.type];
+    if (!schema) return node;
+
+    // Use JSON parse/stringify for deep clone to handle nested objects safely
+    const data = JSON.parse(JSON.stringify(node.data));
+    let changed = false;
+
+    schema.forEach(field => {
+        if (field.type === 'node-select') {
+            const keys = field.key.split('.');
+            let current: any = data;
+            let validPath = true;
+
+            // Navigate to the parent object
+            for (let i = 0; i < keys.length - 1; i++) {
+                if (!current[keys[i]]) {
+                    validPath = false;
+                    break;
+                }
+                current = current[keys[i]];
+            }
+
+            if (validPath) {
+                const lastKey = keys[keys.length - 1];
+                if (current[lastKey] === detachedNodeId) {
+                    current[lastKey] = undefined;
+                    changed = true;
+                }
+            }
+        }
+    });
+
+    return changed ? { ...node, data } : node;
+};
 
 interface CanvasHistoryState {
     nodes: CanvasNode[];
@@ -71,13 +109,30 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         nodes: [...state.nodes, node]
     })),
 
-    removeNode: (id) => set((state) => ({
-        past: [...state.past, { nodes: state.nodes, connections: state.connections }],
-        future: [],
-        nodes: state.nodes.filter((n) => n.id !== id),
-        connections: state.connections.filter((c) => c.source !== id && c.target !== id),
-        selectedNodeId: state.selectedNodeId === id ? null : state.selectedNodeId,
-    })),
+    removeNode: (id) => set((state) => {
+        // Find all connections involving this node to clean up references in other nodes
+        const relatedConnections = state.connections.filter(c => c.source === id || c.target === id);
+        let newNodes = state.nodes;
+
+        relatedConnections.forEach(conn => {
+            const otherNodeId = conn.source === id ? conn.target : conn.source;
+            const otherNode = newNodes.find(n => n.id === otherNodeId);
+            if (otherNode) {
+                const cleanNode = cleanupNodeConnection(otherNode, id);
+                if (cleanNode !== otherNode) {
+                    newNodes = newNodes.map(n => n.id === otherNodeId ? cleanNode : n);
+                }
+            }
+        });
+
+        return {
+            past: [...state.past, { nodes: state.nodes, connections: state.connections }],
+            future: [],
+            nodes: newNodes.filter((n) => n.id !== id),
+            connections: state.connections.filter((c) => c.source !== id && c.target !== id),
+            selectedNodeId: state.selectedNodeId === id ? null : state.selectedNodeId,
+        };
+    }),
 
     duplicateNode: (id) => set((state) => {
         const nodeToDuplicate = state.nodes.find(n => n.id === id);
@@ -156,11 +211,35 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         };
     }),
 
-    removeConnection: (id) => set((state) => ({
-        past: [...state.past, { nodes: state.nodes, connections: state.connections }],
-        future: [],
-        connections: state.connections.filter((c) => c.id !== id)
-    })),
+    removeConnection: (id) => set((state) => {
+        const connection = state.connections.find(c => c.id === id);
+        if (!connection) return state;
+
+        const sourceNode = state.nodes.find(n => n.id === connection.source);
+        const targetNode = state.nodes.find(n => n.id === connection.target);
+
+        let newNodes = state.nodes;
+
+        if (sourceNode && targetNode) {
+            const cleanSource = cleanupNodeConnection(sourceNode, targetNode.id);
+            const cleanTarget = cleanupNodeConnection(targetNode, sourceNode.id);
+
+            if (cleanSource !== sourceNode || cleanTarget !== targetNode) {
+                newNodes = state.nodes.map(n => {
+                    if (n.id === sourceNode.id) return cleanSource;
+                    if (n.id === targetNode.id) return cleanTarget;
+                    return n;
+                });
+            }
+        }
+
+        return {
+            past: [...state.past, { nodes: state.nodes, connections: state.connections }],
+            future: [],
+            nodes: newNodes,
+            connections: state.connections.filter((c) => c.id !== id)
+        };
+    }),
 
     setDraftConnection: (draft) => set({ draftConnection: draft }),
     setTransform: (scale, pan) => set({ scale, pan }),

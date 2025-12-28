@@ -77,7 +77,8 @@ func main() {
 
 		// Deploy Module
 		deployRepo := deploy.NewRepository()
-		deploySvc := deploy.NewService(deployRepo)
+        manifestGenerator := deploy.NewManifestGenerator()
+		deploySvc := deploy.NewService(deployRepo, workspaceRepo, manifestGenerator)
 		deployHandler := deploy.NewHandler(deploySvc, authSvc)
 		deployHandler.RegisterRoutes(r)
 

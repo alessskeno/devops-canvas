@@ -114,6 +114,15 @@ export const COMPONENT_REGISTRY: ComponentDefinition[] = [
         color: 'text-orange-600 bg-orange-100 dark:text-orange-400 dark:bg-orange-900/30',
         defaultConfig: { label: 'Grafana' }
     },
+    {
+        type: 'monitoring_stack',
+        name: 'Monitoring Stack',
+        description: 'Kube-Prometheus-Stack (Prometheus + Grafana + Alertmanager)',
+        icon: 'Activity',
+        category: 'monitoring',
+        color: 'text-purple-600 bg-purple-100 dark:text-purple-400 dark:bg-purple-900/30',
+        defaultConfig: { label: 'Monitoring Stack' }
+    },
     // Configuration
     {
         type: 'file',

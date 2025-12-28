@@ -9,6 +9,7 @@ interface WorkspaceState {
     error: string | null;
 
     fetchWorkspaces: () => Promise<void>;
+    fetchWorkspace: (id: string) => Promise<void>;
     createWorkspace: (data: Omit<Workspace, 'id' | 'componentCount' | 'lastModified'>) => Promise<void>;
     updateWorkspace: (id: string, data: Partial<Workspace>) => Promise<void>;
     duplicateWorkspace: (id: string) => Promise<void>;
@@ -26,35 +27,60 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         set({ isLoading: true });
         try {
             const response = await api.get<Workspace[]>('/workspaces');
-
-            // Map backend "created_at" to "lastModified" if needed, 
-            // but backend returns JSON keys snake_case usually unless struct tags say otherwise.
-            // Our struct tags say "json:created_at", etc.
-            // Frontend type expects camelCase where defined.
-            // Let's ensure Mapping is correct if keys differ.
-            // Backend Model: ID, Name, Description, OwnerID, LastUpdatedBy, LastUpdatedByName, CreatedAt, UpdatedAt
-            // Frontend Type: id, name, description, environment, visibility, componentCount, lastModified, last_updated_by...
-
-            // We need to map the response to match Frontend Interface exactly
-            // or update Frontend Interface to match Backend.
-            // Let's generic map for now since we haven't strictly typed the API response differently
             const mappedWorkspaces = response.data.map((w: any) => ({
                 id: w.id,
                 name: w.name,
                 description: w.description,
                 environment: w.environment || 'development',
-                visibility: w.visibility || 'private', // Backend provides 'visibility' string
+                visibility: w.visibility || 'private',
+                version: w.version || 'v1.0.0',
                 componentCount: w.componentCount || 0,
                 componentTypes: w.componentTypes || [],
                 lastModified: w.updated_at,
                 last_updated_by: w.last_updated_by,
                 last_updated_by_name: w.last_updated_by_name
             }));
-
             set({ workspaces: mappedWorkspaces, isLoading: false });
         } catch (err: any) {
             console.error(err);
             set({ error: err.message || 'Failed to fetch workspaces', isLoading: false });
+        }
+    },
+
+    fetchWorkspace: async (id: string) => {
+        set({ isLoading: true });
+        try {
+            // We need an endpoint for single workspace. Repository has GetWorkspace but handler needs to expose it?
+            // Handler has GetCanvas but does it have GetWorkspace metadata?
+            // Handler RegisterRoutes:
+            // r.Get("/", h.ListWorkspaces)
+            // r.Post("/", h.CreateWorkspace)
+            // r.Put("/{id}", h.UpdateWorkspace) // Only updates
+            // No Get("/{id}") for metadata! 
+            // Wait, GetCanvas is at /{id}/canvas.
+            // I need to add GetWorkspace metadata endpoint or re-use ListWorkspaces filtering?
+            // Ideally backend should have r.Get("/{id}", h.GetWorkspace).
+            // Since I am updating backend too, I should add that route.
+
+            // Assuming I will add the route:
+            const response = await api.get<Workspace>(`/workspaces/${id}`);
+            const w: any = response.data;
+            const ws: Workspace = {
+                id: w.id,
+                name: w.name,
+                description: w.description,
+                environment: w.environment || 'development',
+                visibility: w.visibility || 'private',
+                version: w.version || 'v1.0.0',
+                componentCount: w.componentCount || 0,
+                componentTypes: w.componentTypes || [],
+                lastModified: w.updated_at,
+                last_updated_by: w.last_updated_by,
+                last_updated_by_name: w.last_updated_by_name
+            };
+            set({ currentWorkspace: ws, isLoading: false });
+        } catch (err: any) {
+            set({ error: err.message || 'Failed to fetch workspace', isLoading: false });
         }
     },
 
@@ -145,6 +171,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
             }));
         } catch (err: any) {
             set({ error: err.message, isLoading: false });
+            throw err;
         }
     },
 

@@ -19,6 +19,7 @@ func NewHandler(svc *Service, authSvc *auth.Service) *Handler {
 func (h *Handler) RegisterRoutes(r chi.Router) {
     r.Route("/deploy", func(r chi.Router) {
         r.Post("/{workspaceID}", h.DeployWorkspace)
+        r.Post("/{workspaceID}/manifests", h.GenerateManifests)
         r.Get("/{deployID}/logs", h.GetLogs)
     })
 }
@@ -58,6 +59,31 @@ func (h *Handler) GetLogs(w http.ResponseWriter, r *http.Request) {
     json.NewEncoder(w).Encode(map[string]interface{}{
         "logs": logs,
     })
+}
+
+func (h *Handler) GenerateManifests(w http.ResponseWriter, r *http.Request) {
+    userID, err := h.getUserId(r)
+    if err != nil {
+        h.respondError(w, http.StatusUnauthorized, "Unauthorized")
+        return
+    }
+
+    // Role check (Viewer can also preview manifests?)
+    // Let's allow Viewer to preview.
+    if err := h.authSvc.CheckRole(r.Context(), userID, "Owner", "Admin", "Editor", "Viewer"); err != nil {
+        h.respondError(w, http.StatusForbidden, "Insufficient permissions")
+        return
+    }
+
+    workspaceID := chi.URLParam(r, "workspaceID")
+    manifests, err := h.svc.GenerateManifests(r.Context(), workspaceID)
+    if err != nil {
+        h.respondError(w, http.StatusInternalServerError, err.Error())
+        return
+    }
+
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(manifests)
 }
 
 func (h *Handler) getUserId(r *http.Request) (string, error) {

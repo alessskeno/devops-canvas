@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { useWorkspaceStore } from '../../store/workspaceStore';
 import { useAuthStore } from '../../store/authStore';
 import { WorkspaceCard } from './WorkspaceCard';
@@ -10,6 +11,7 @@ import { WorkspaceModal } from './WorkspaceModal';
 import { Select } from '../shared/Select';
 import { useDarkMode } from '../../hooks/useDarkMode';
 import { Workspace } from '../../types';
+import { Modal } from '../shared/Modal';
 
 
 export function Dashboard() {
@@ -20,6 +22,7 @@ export function Dashboard() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
     const [editingWorkspace, setEditingWorkspace] = useState<Workspace | undefined>(undefined);
+    const [workspaceToDelete, setWorkspaceToDelete] = useState<Workspace | null>(null);
 
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
@@ -30,12 +33,19 @@ export function Dashboard() {
     }, [fetchWorkspaces]);
 
     const handleModalSubmit = async (data: any) => {
-        if (modalMode === 'create') {
-            await createWorkspace(data);
-        } else if (modalMode === 'edit' && editingWorkspace) {
-            await updateWorkspace(editingWorkspace.id, data);
+        try {
+            if (modalMode === 'create') {
+                await createWorkspace(data);
+                toast.success('Workspace created successfully');
+            } else if (modalMode === 'edit' && editingWorkspace) {
+                await updateWorkspace(editingWorkspace.id, data);
+                toast.success('Workspace updated successfully');
+            }
+            setIsModalOpen(false);
+        } catch (error: any) {
+            const msg = error.response?.data?.error || error.message || 'Operation failed';
+            toast.error(msg);
         }
-        setIsModalOpen(false);
     };
 
     const openCreateModal = () => {
@@ -48,6 +58,18 @@ export function Dashboard() {
         setModalMode('edit');
         setEditingWorkspace(ws);
         setIsModalOpen(true);
+    };
+
+    const confirmDelete = async () => {
+        if (!workspaceToDelete) return;
+        try {
+            await deleteWorkspace(workspaceToDelete.id);
+            toast.success('Workspace deleted');
+            setWorkspaceToDelete(null);
+        } catch (error: any) {
+            const msg = error.response?.data?.error || error.message || 'Deletion failed';
+            toast.error(msg);
+        }
     };
 
     return (
@@ -168,9 +190,17 @@ export function Dashboard() {
                                     workspace={ws}
                                     onClick={() => navigate(`/workspace/${ws.id}`)}
                                     onEdit={() => openEditModal(ws)}
-                                    onDuplicate={() => duplicateWorkspace(ws.id)}
-                                    onDelete={() => {
-                                        useWorkspaceStore.getState().deleteWorkspace(ws.id);
+                                    onDuplicate={async () => {
+                                        try {
+                                            await duplicateWorkspace(ws.id);
+                                            toast.success('Workspace duplicated');
+                                        } catch (error: any) {
+                                            const msg = error.response?.data?.error || error.message || 'Duplication failed';
+                                            toast.error(msg);
+                                        }
+                                    }}
+                                    onDelete={async () => {
+                                        setWorkspaceToDelete(ws);
                                     }}
                                     highlight={searchTerm}
                                 />
@@ -187,6 +217,24 @@ export function Dashboard() {
                 initialData={editingWorkspace}
                 mode={modalMode}
             />
+
+            {/* Delete Confirmation Modal */}
+            <Modal
+                isOpen={!!workspaceToDelete}
+                onClose={() => setWorkspaceToDelete(null)}
+                title="Delete Workspace"
+                size="sm"
+            >
+                <div className="flex flex-col gap-4">
+                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                        Are you sure you want to delete <span className="font-bold text-slate-900 dark:text-white">{workspaceToDelete?.name}</span>? This action cannot be undone.
+                    </p>
+                    <div className="flex justify-end gap-3 mt-2">
+                        <Button variant="secondary" onClick={() => setWorkspaceToDelete(null)}>Cancel</Button>
+                        <Button variant="danger" onClick={confirmDelete}>Delete</Button>
+                    </div>
+                </div>
+            </Modal>
         </div>
     );
 }

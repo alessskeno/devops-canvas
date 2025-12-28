@@ -22,6 +22,7 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
     r.Route("/workspaces", func(r chi.Router) {
         r.Get("/", h.ListWorkspaces)
         r.Post("/", h.CreateWorkspace)
+        r.Get("/{id}", h.GetWorkspace)
         r.Put("/{id}", h.UpdateWorkspace)
         r.Put("/{id}", h.UpdateWorkspace)
         r.Post("/{id}/duplicate", h.DuplicateWorkspace)
@@ -38,20 +39,92 @@ func (h *Handler) DuplicateWorkspace(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    // Check if user has permission to CREATE workspaces (since duplication creates one)
+    // 1. Check Global Permission to Create (Owner/Admin/Editor)
     if err := h.authSvc.CheckRole(r.Context(), userID, "Owner", "Admin", "Editor"); err != nil {
-        h.respondError(w, http.StatusForbidden, "Insufficient permissions to create (duplicate) workspace")
+        h.respondError(w, http.StatusForbidden, "Insufficient global permissions to create workspaces")
         return
     }
 
     workspaceID := chi.URLParam(r, "id")
+
+    // 2. Check Read Access to Source Workspace
+    sourceWs, err := h.svc.GetWorkspace(r.Context(), workspaceID)
+    if err != nil {
+        h.respondError(w, http.StatusNotFound, "Source workspace not found")
+        return
+    }
+
+    canRead := false
+    // Global Admin can always read
+    if err := h.authSvc.CheckRole(r.Context(), userID, "Admin"); err == nil {
+        canRead = true
+    }
+    
+    if !canRead {
+        if sourceWs.Visibility == "public" || sourceWs.Visibility == "team" {
+            canRead = true
+        } else {
+             // Check membership
+             _, err := h.svc.GetMemberRole(r.Context(), workspaceID, userID)
+             if err == nil {
+                 canRead = true
+             }
+        }
+    }
+
+    if !canRead {
+        h.respondError(w, http.StatusForbidden, "Insufficient permissions to access source workspace")
+        return 
+    }
+
     ws, err := h.svc.DuplicateWorkspace(r.Context(), workspaceID, userID)
     if err != nil {
         h.respondError(w, http.StatusInternalServerError, "Failed to duplicate workspace: "+err.Error())
         return
     }
 
-    w.WriteHeader(http.StatusOK) // Or Created? StatusOK is fine.
+    w.WriteHeader(http.StatusOK)
+    json.NewEncoder(w).Encode(ws)
+}
+
+func (h *Handler) GetWorkspace(w http.ResponseWriter, r *http.Request) {
+    userID, err := h.getUserId(r)
+    if err != nil {
+        h.respondError(w, http.StatusUnauthorized, "Unauthorized")
+        return
+    }
+
+    workspaceID := chi.URLParam(r, "id")
+
+    ws, err := h.svc.GetWorkspace(r.Context(), workspaceID)
+    if err != nil {
+        h.respondError(w, http.StatusNotFound, "Workspace not found")
+        return
+    }
+
+    canRead := false
+    // Global Admin can always read
+    if err := h.authSvc.CheckRole(r.Context(), userID, "Admin"); err == nil {
+        canRead = true
+    }
+    
+    if !canRead {
+        if ws.Visibility == "public" || ws.Visibility == "team" {
+            canRead = true
+        } else {
+             // Check membership
+             _, err := h.svc.GetMemberRole(r.Context(), workspaceID, userID)
+             if err == nil {
+                 canRead = true
+             }
+        }
+    }
+
+    if !canRead {
+        h.respondError(w, http.StatusForbidden, "Insufficient permissions to view this workspace")
+        return 
+    }
+
     json.NewEncoder(w).Encode(ws)
 }
 
@@ -161,13 +234,33 @@ func (h *Handler) DeleteWorkspace(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    // Only OWNER can delete workspace
-    if err := h.authSvc.CheckRole(r.Context(), userID, "Owner"); err != nil {
-        h.respondError(w, http.StatusForbidden, "Only owners can delete workspaces")
+    workspaceID := chi.URLParam(r, "id")
+    isAllowed := false
+
+    // 1. Global Admin can delete any workspace
+    if err := h.authSvc.CheckRole(r.Context(), userID, "Admin"); err == nil {
+        isAllowed = true
+    }
+
+    if !isAllowed {
+        // 2. Check Workspace Membership Role (Owner or Admin of the workspace)
+        role, err := h.svc.GetMemberRole(r.Context(), workspaceID, userID)
+        if err == nil {
+            roleLower := strings.ToLower(role)
+            if roleLower == "owner" || roleLower == "admin" {
+                isAllowed = true
+            }
+        }
+    }
+
+    if !isAllowed {
+        // Fallback: Check if user is the direct owner in the workspaces table (if not covered by member role?)
+        // Usually creation sets member role to owner, but let's be safe or just rely on member role.
+        // If member role check failed (e.g. not a member), then they definitely can't delete unless global admin.
+        h.respondError(w, http.StatusForbidden, "Insufficient permissions: Only Global Admins or Workspace Owners/Admins can delete workspaces")
         return
     }
 
-    workspaceID := chi.URLParam(r, "id")
     if err := h.svc.DeleteWorkspace(r.Context(), workspaceID); err != nil {
         h.respondError(w, http.StatusInternalServerError, "Failed to delete workspace: "+err.Error())
         return

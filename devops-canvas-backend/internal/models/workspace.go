@@ -13,6 +13,7 @@ type Workspace struct {
     UpdatedAt         time.Time  `json:"updated_at"`
     Environment       string     `json:"environment"`
     Visibility        string     `json:"visibility"`
+    Version           string     `json:"version"`
     ComponentTypes    []string   `json:"componentTypes"`
     ComponentCount    int        `json:"componentCount"`
 }

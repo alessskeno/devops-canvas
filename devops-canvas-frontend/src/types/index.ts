@@ -13,8 +13,9 @@ export interface Workspace {
     id: string;
     name: string;
     description?: string;
-    environment: 'development' | 'staging' | 'production' | 'testing' | 'custom';
+    environment: 'development' | 'staging' | 'production' | 'custom';
     visibility: 'private' | 'team' | 'public';
+    version?: string;
     componentCount: number;
     lastModified: string;
     last_updated_by?: string;

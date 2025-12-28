@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { Button } from '../shared/Button';
 import { useCanvasStore } from '../../store/canvasStore';
+import { useWorkspaceStore } from '../../store/workspaceStore';
 import toast from 'react-hot-toast';
 import { useDarkMode } from '../../hooks/useDarkMode';
 import { ExportModal } from '../modals/ExportModal';
@@ -27,6 +28,8 @@ export function NodeEditor() {
         loadCanvas, fetchCanvas, saveCanvas, isSaving,
         selectedNodeId, duplicateNode, removeNode
     } = useCanvasStore();
+
+    const { fetchWorkspace, currentWorkspace } = useWorkspaceStore();
 
     const [sidebarVisible, setSidebarVisible] = useState(() => localStorage.getItem('canvas_sidebar') !== 'false');
     useEffect(() => localStorage.setItem('canvas_sidebar', String(sidebarVisible)), [sidebarVisible]);
@@ -69,6 +72,7 @@ export function NodeEditor() {
     // Load from Backend on Mount
     useEffect(() => {
         if (workspaceId) {
+            fetchWorkspace(workspaceId);
             fetchCanvas(workspaceId).then(() => {
                 // Reset unsaved changes after load
                 setTimeout(() => {
@@ -77,7 +81,16 @@ export function NodeEditor() {
                 }, 100);
             });
         }
-    }, [workspaceId, fetchCanvas]);
+    }, [workspaceId, fetchCanvas, fetchWorkspace]);
+
+    // ... existing code ...
+
+    // Header JSX replacement
+    /* 
+       Locating the header div around line 321-327.
+       We will replace lines 321-327 with dynamic content.
+    */
+
 
     // Save Function
     const saveWorkspace = async () => {
@@ -97,10 +110,11 @@ export function NodeEditor() {
             setHasUnsavedChanges(false);
             setIsAutoSaving(false);
             toast.success('Workspace saved');
-        } catch (error) {
+        } catch (error: any) {
             console.error(error);
             setIsAutoSaving(false);
-            toast.error('Failed to save workspace');
+            const msg = error.response?.data?.error || error.message || 'Failed to save workspace';
+            toast.error(msg);
         }
     };
 
@@ -318,11 +332,31 @@ export function NodeEditor() {
                     <div className="flex items-center h-8 w-[1px] bg-slate-200 dark:bg-slate-700 mx-2"></div>
 
                     <div className="flex items-center">
-                        <h1 className="font-bold text-lg text-slate-950 dark:text-white mr-3">E-commerce Backend</h1>
-                        <div className="flex items-center space-x-2">
-                            <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">v1.2.4</span>
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold tracking-wide uppercase bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">Dev</span>
-                        </div>
+                        <h1 className="font-bold text-lg text-slate-950 dark:text-white mr-3">{currentWorkspace?.name || 'Loading...'}</h1>
+                        {currentWorkspace && (
+                            <div className="flex items-center space-x-2">
+                                <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">{currentWorkspace.version || 'v0.1.0'}</span>
+                                {(() => {
+                                    const env = currentWorkspace.environment || 'development';
+                                    let label = 'DEV';
+                                    let color = 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400';
+
+                                    if (env === 'production') {
+                                        label = 'PROD';
+                                        color = 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400';
+                                    } else if (env === 'staging') {
+                                        label = 'STAGING';
+                                        color = 'bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400';
+                                    }
+
+                                    return (
+                                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-wide uppercase ${color}`}>
+                                            {label}
+                                        </span>
+                                    );
+                                })()}
+                            </div>
+                        )}
                     </div>
                 </div>
 
