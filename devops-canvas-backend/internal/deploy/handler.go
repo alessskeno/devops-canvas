@@ -5,6 +5,7 @@ import (
     "net/http"
     "github.com/go-chi/chi/v5"
     "devops-canvas-backend/internal/auth"
+    "devops-canvas-backend/internal/deploy/translator"
 )
 
 type Handler struct {
@@ -21,6 +22,11 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
         r.Post("/{workspaceID}", h.DeployWorkspace)
         r.Post("/{workspaceID}/manifests", h.GenerateManifests)
         r.Get("/{deployID}/logs", h.GetLogs)
+    })
+    
+    // Config related routes
+    r.Route("/components", func(r chi.Router) {
+        r.Get("/{type}/versions", h.GetVersions)
     })
 }
 
@@ -92,6 +98,26 @@ func (h *Handler) getUserId(r *http.Request) (string, error) {
         tokenString = tokenString[7:]
     }
     return h.authSvc.ParseToken(tokenString)
+}
+
+
+
+func (h *Handler) GetVersions(w http.ResponseWriter, r *http.Request) {
+    if _, err := h.getUserId(r); err != nil {
+        h.respondError(w, http.StatusUnauthorized, "Unauthorized")
+        return
+    }
+
+    componentType := chi.URLParam(r, "type")
+    
+    versions, err := translator.GetAvailableVersions(componentType)
+    if err != nil {
+        h.respondError(w, http.StatusBadRequest, err.Error())
+        return
+    }
+
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(versions)
 }
 
 func (h *Handler) respondError(w http.ResponseWriter, code int, message string) {

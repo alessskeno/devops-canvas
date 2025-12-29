@@ -13,7 +13,7 @@ func NewManifestGenerator() *ManifestGenerator {
 }
 
 // GenerateManifests takes a Node and produces deployment manifests
-func (g *ManifestGenerator) GenerateManifests(node models.Node, allNodes []models.Node) (*translator.GeneratedManifests, error) {
+func (g *ManifestGenerator) GenerateManifests(node models.Node, allNodes []models.Node, allConnections []models.Connection) (*translator.GeneratedManifests, error) {
 	trans, err := translator.GetTranslator(node.Type)
 	if err != nil {
 		return nil, err
@@ -31,6 +31,24 @@ func (g *ManifestGenerator) GenerateManifests(node models.Node, allNodes []model
                 return &n, nil
             }
             return nil, fmt.Errorf("node not found")
+        },
+        FindConnectedNodes: func(nodeID string) ([]models.Node, error) {
+            var connected []models.Node
+            for _, conn := range allConnections {
+                var otherID string
+                if conn.SourceID == nodeID {
+                    otherID = conn.TargetID
+                } else if conn.TargetID == nodeID {
+                    otherID = conn.SourceID
+                }
+                
+                if otherID != "" {
+                     if n, ok := nodeMap[otherID]; ok {
+                         connected = append(connected, n)
+                     }
+                }
+            }
+            return connected, nil
         },
     }
     

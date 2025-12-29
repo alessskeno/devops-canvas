@@ -17,7 +17,8 @@ export function generateKindConfig(config: KindClusterConfig, advancedConfigCont
     for (let i = 0; i < (topology.controlPlanes || 1); i++) {
         lines.push(`- role: control-plane`);
         if (version) {
-            lines.push(`  image: ${version}`);
+            const image = version.startsWith('kindest/node:') ? version : `kindest/node:${version}`;
+            lines.push(`  image: ${image}`);
         }
 
         // Networking setup for first control plane (Ingress)
@@ -53,7 +54,8 @@ export function generateKindConfig(config: KindClusterConfig, advancedConfigCont
     for (let i = 0; i < (topology.workers || 0); i++) {
         lines.push(`- role: worker`);
         if (version) {
-            lines.push(`  image: ${version}`);
+            const image = version.startsWith('kindest/node:') ? version : `kindest/node:${version}`;
+            lines.push(`  image: ${image}`);
         }
         // Mounts for workers too
         if (mounts && mounts.length > 0) {

@@ -100,6 +100,64 @@ func (t *RedisTranslator) Translate(node models.Node, ctx TranslationContext) (*
         helm["commonConfiguration"] = extraConfig
     }
 
+    // --- Monitoring Integration ---
+    if ctx.FindConnectedNodes != nil {
+        connected, _ := ctx.FindConnectedNodes(node.ID)
+        for _, neighbor := range connected {
+            if neighbor.Type == "monitoring_stack" {
+                // Connected to monitoring stack!
+                
+                // Ensure predictable service names
+                helm["fullnameOverride"] = fmt.Sprintf("redis-%s", node.ID[:4])
+                serviceName := fmt.Sprintf("redis-%s-master", node.ID[:4]) // Bitnami redis usually uses -master suffix for standalone/primary
+
+                helm["metrics"] = map[string]interface{}{
+                    "enabled": true,
+                    "serviceMonitor": map[string]interface{}{
+                        "enabled": true,
+                        "labels": map[string]interface{}{
+                             "release": "devops-canvas-chart",
+                        },
+                    },
+                    "prometheusRule": map[string]interface{}{
+                        "enabled": true,
+                        "labels": map[string]interface{}{
+                             "release": "devops-canvas-chart",
+                        },
+                        "rules": []map[string]interface{}{
+                            {
+                                "alert": "RedisDown",
+                                "expr": fmt.Sprintf(`redis_up{service="%s"} == 0`, serviceName),
+                                "for": "1m",
+                                "labels": map[string]interface{}{
+                                    "severity": "critical",
+                                },
+                                "annotations": map[string]interface{}{
+                                    "summary": "Redis instance {{ $labels.instance }} down",
+                                    "description": "Redis has been down for more than 1 minute.",
+                                },
+                            },
+                            {
+                                "alert": "RedisMemoryHigh",
+                                // Simplified example, real query depends on maxmemory
+                                "expr": fmt.Sprintf(`redis_memory_used_bytes{service="%s"} > 0.9 * redis_memory_max_bytes{service="%s"}`, serviceName, serviceName),
+                                "for": "5m",
+                                "labels": map[string]interface{}{
+                                    "severity": "warning",
+                                },
+                                "annotations": map[string]interface{}{
+                                    "summary": "Redis memory usage high",
+                                },
+                            },
+                        },
+                    },
+                }
+
+                break 
+            }
+        }
+    }
+
     return &GeneratedManifests{
         DockerCompose: compose,
         HelmValues:    &helm,

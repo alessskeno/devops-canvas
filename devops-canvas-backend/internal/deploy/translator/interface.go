@@ -6,7 +6,8 @@ import (
 
 // TranslationContext holds data available to translators
 type TranslationContext struct {
-    FindNodeByID func(id string) (*models.Node, error)
+    FindNodeByID       func(id string) (*models.Node, error)
+    FindConnectedNodes func(nodeID string) ([]models.Node, error)
 }
 
 // ComponentTranslator defines the interface for translating a specific component type

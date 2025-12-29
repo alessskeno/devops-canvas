@@ -86,19 +86,87 @@ func (t *MySQLTranslator) Translate(node models.Node, ctx TranslationContext) (*
     }
     
     // Add additional configs to 'configuration' string
-    extraConfig := ""
+    // Use extraFlags for runtime configuration as it overrides my.cnf defaults cleaner
+    extraFlags := ""
     if config.MaxConnections != nil {
-        extraConfig += fmt.Sprintf("max_connections=%v\n", config.MaxConnections)
+        extraFlags += fmt.Sprintf(" --max-connections=%v", config.MaxConnections)
     }
     if config.InnoDBBufferPool != "" {
-        extraConfig += fmt.Sprintf("innodb_buffer_pool_size=%s\n", config.InnoDBBufferPool)
+        extraFlags += fmt.Sprintf(" --innodb-buffer-pool-size=%s", config.InnoDBBufferPool)
     }
-    if !config.InnoDBFilePerTable {
-        extraConfig += "innodb_file_per_table=0\n"
+    // Explicitly set innodb_file_per_table based on config (default true)
+    if config.InnoDBFilePerTable {
+        extraFlags += " --innodb-file-per-table=1"
+    } else {
+        extraFlags += " --innodb-file-per-table=0"
     }
     
-    if extraConfig != "" {
-        helm["primary"].(map[string]interface{})["configuration"] = extraConfig
+    if extraFlags != "" {
+        helm["primary"].(map[string]interface{})["extraFlags"] = extraFlags
+    }
+
+    // --- Monitoring Integration ---
+    if ctx.FindConnectedNodes != nil {
+        connected, _ := ctx.FindConnectedNodes(node.ID)
+        for _, neighbor := range connected {
+            if neighbor.Type == "monitoring_stack" {
+                // Connected to monitoring stack!
+                
+                // Ensure predictable service names
+                helm["fullnameOverride"] = fmt.Sprintf("mysql-%s", node.ID[:4])
+                serviceName := fmt.Sprintf("mysql-%s", node.ID[:4])
+
+                helm["metrics"] = map[string]interface{}{
+                    "enabled": true,
+                    "serviceMonitor": map[string]interface{}{
+                        "enabled": true,
+                        "labels": map[string]interface{}{
+                             "release": "devops-canvas-chart",
+                        },
+                    },
+                    "prometheusRule": map[string]interface{}{
+                        "enabled": true,
+                        "labels": map[string]interface{}{
+                             "release": "devops-canvas-chart",
+                        },
+                        "rules": []map[string]interface{}{
+                            {
+                                "alert": "MySQLDown",
+                                "expr": fmt.Sprintf(`mysql_up{service="%s"} == 0`, serviceName),
+                                "for": "1m",
+                                "labels": map[string]interface{}{
+                                    "severity": "critical",
+                                },
+                                "annotations": map[string]interface{}{
+                                    "summary": "MySQL instance {{ $labels.instance }} down",
+                                    "description": "MySQL has been down for more than 1 minute.",
+                                },
+                            },
+                            {
+                                "alert": "MySQLConnectionsHigh",
+                                // Example query
+                                "expr": fmt.Sprintf(`mysql_global_status_threads_connected{service="%s"} > %v * 0.8`, serviceName, func() int {
+                                    if config.MaxConnections != nil {
+                                        if f, ok := config.MaxConnections.(float64); ok { return int(f) }
+                                        return 151 // Default MySQL max_connections
+                                    }
+                                    return 151
+                                }()),
+                                "for": "5m",
+                                "labels": map[string]interface{}{
+                                    "severity": "warning",
+                                },
+                                "annotations": map[string]interface{}{
+                                    "summary": "High connection count",
+                                },
+                            },
+                        },
+                    },
+                }
+
+                break 
+            }
+        }
     }
 
     return &GeneratedManifests{

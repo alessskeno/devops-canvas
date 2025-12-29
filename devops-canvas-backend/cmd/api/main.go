@@ -88,6 +88,16 @@ func main() {
 		})
 	})
 
+	// Start Async Helm Repo Init
+	go func() {
+		log.Println("Initializing Helm Repositories...")
+		if err := deploy.InitHelmRepos(); err != nil {
+			log.Printf("Failed to initialize Helm Repos: %v", err)
+		} else {
+			log.Println("Helm Repositories Initialized Successfully")
+		}
+	}()
+
 	log.Printf("Server starting on port %s", port)
 	if err := http.ListenAndServe(":"+port, r); err != nil {
 		log.Fatalf("Server failed to start: %v", err)

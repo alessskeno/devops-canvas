@@ -72,6 +72,57 @@ func (t *KafkaTranslator) Translate(node models.Node, ctx TranslationContext) (*
         helm["logRetentionMs"] = config.RetentionMs
     }
 
+    // --- Monitoring Integration ---
+    if ctx.FindConnectedNodes != nil {
+        connected, _ := ctx.FindConnectedNodes(node.ID)
+        for _, neighbor := range connected {
+            if neighbor.Type == "monitoring_stack" {
+                // Connected to monitoring stack!
+                
+                helm["fullnameOverride"] = fmt.Sprintf("kafka-%s", node.ID[:4])
+                // Service name for Kafka usually involves -headless or just service depending on access
+                // Bitnami JMX exporter typically runs on endpoints.
+                serviceName := fmt.Sprintf("kafka-%s-jmx-metrics", node.ID[:4]) // Usually exposed via headless or dedicated metrics svc 
+                // Actually, let's use the generic service name and rely on label selectors in ServiceMonitor which Bitnami handles nicely.
+                serviceName = fmt.Sprintf("kafka-%s", node.ID[:4])
+
+                helm["metrics"] = map[string]interface{}{
+                    "jmx": map[string]interface{}{
+                        "enabled": true,
+                    },
+                    "serviceMonitor": map[string]interface{}{
+                        "enabled": true,
+                        "labels": map[string]interface{}{
+                             "release": "devops-canvas-chart",
+                        },
+                    },
+                    "prometheusRule": map[string]interface{}{
+                        "enabled": true,
+                        "labels": map[string]interface{}{
+                             "release": "devops-canvas-chart",
+                        },
+                        "rules": []map[string]interface{}{
+                            {
+                                "alert": "KafkaDown",
+                                "expr": fmt.Sprintf(`kafka_up{service="%s"} == 0`, serviceName), // JMX exporter metric
+                                "for": "1m",
+                                "labels": map[string]interface{}{
+                                    "severity": "critical",
+                                },
+                                "annotations": map[string]interface{}{
+                                    "summary": "Kafka instance {{ $labels.instance }} down",
+                                    "description": "Kafka has been down for more than 1 minute.",
+                                },
+                            },
+                        },
+                    },
+                }
+
+                break 
+            }
+        }
+    }
+
     return &GeneratedManifests{
         DockerCompose: compose,
         HelmValues:    &helm,

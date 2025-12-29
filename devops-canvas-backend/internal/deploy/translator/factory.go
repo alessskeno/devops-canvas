@@ -19,14 +19,9 @@ func GetTranslator(componentType string) (ComponentTranslator, error) {
         return &ClickHouseTranslator{}, nil
     case "rabbitmq":
         return &RabbitMQTranslator{}, nil
-    case "prometheus":
-        return &PrometheusTranslator{}, nil
-    case "grafana":
-        return &GrafanaTranslator{}, nil
+
     case "valkey":
         return &ValkeyTranslator{}, nil
-    case "alertmanager":
-        return &AlertmanagerTranslator{}, nil
     case "monitoring_stack":
         return &MonitoringStackTranslator{}, nil
 	default:

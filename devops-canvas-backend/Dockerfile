@@ -23,8 +23,8 @@ FROM alpine:3.18
 
 WORKDIR /app
 
-# Install runtime dependencies (e.g. for health checks or debugging)
-RUN apk add --no-cache ca-certificates tzdata
+# Install runtime dependencies
+RUN apk add --no-cache ca-certificates tzdata helm
 
 # Copy the binary from the builder stage
 COPY --from=builder /app/main .

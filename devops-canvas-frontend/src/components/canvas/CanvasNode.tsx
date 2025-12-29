@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import { CanvasNode as NodeData } from '../../types';
-import { Database, Server, Box, Layers, Activity, HardDrive, BarChart2, X, Lock, FileText, Bell } from 'lucide-react';
+import { Database, Server, Box, Layers, Activity, HardDrive, BarChart2, X, Lock, FileText, Bell, Boxes, Container } from 'lucide-react';
 import { useCanvasStore } from '../../store/canvasStore';
 import { getComponentByType } from '../../utils/componentRegistry';
 import { isFieldSensitive } from '../../utils/security';
@@ -15,7 +15,9 @@ interface CanvasNodeProps {
 
 // Map registry icon strings to Lucide components
 const IconMap: Record<string, any> = {
-    'Container': Box,
+    'Container': Container,
+    'Box': Box,
+    'Boxes': Boxes,
     'Database': Database,
     'Layers': Layers,
     'Activity': Activity,
@@ -169,7 +171,7 @@ function CanvasNodeComponent({ node, scale, isSelected }: CanvasNodeProps) {
                 zIndex: node.selected ? 10 : 1,
             }}
             className={`
-                canvas-node group w-64 bg-white dark:bg-slate-900 rounded-xl shadow-sm border-2 group transition-[box-shadow,border-color,background-color] duration-200 z-10 cursor-pointer select-none
+                canvas-node group w-80 bg-white dark:bg-slate-900 rounded-xl shadow-sm border-2 group transition-[box-shadow,border-color,background-color] duration-200 z-10 cursor-pointer select-none
                 ${(isSelected || node.selected)
                     ? 'border-blue-500 ring-2 ring-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.4)]'
                     : 'border-gray-200 dark:border-slate-800 hover:border-blue-300 dark:hover:border-blue-500 hover:shadow-md'
@@ -211,14 +213,16 @@ function CanvasNodeComponent({ node, scale, isSelected }: CanvasNodeProps) {
                     onMouseUp={(e) => handlePortMouseUp(e, 'input')}
                 ></div>
 
-                {/* Output Port (Right) */}
-                <div
-                    className="absolute -right-[7px] top-[calc(100%+1px)] -translate-y-1/2 w-3.5 h-3.5 bg-white dark:bg-slate-400 border-2 border-slate-200 dark:border-slate-950 rounded-full hover:bg-blue-500 hover:scale-125 transition-all z-20 cursor-crosshair shadow-md node-interactive"
-                    title="Output"
-                    data-port-type="output"
-                    data-node-id={node.id}
-                    onMouseDown={(e) => handlePortMouseDown(e, 'output')}
-                ></div>
+                {/* Output Port (Right) - Only if NOT infrastructure */}
+                {definition?.category !== 'infrastructure' && (
+                    <div
+                        className="absolute -right-[7px] top-[calc(100%+1px)] -translate-y-1/2 w-3.5 h-3.5 bg-white dark:bg-slate-400 border-2 border-slate-200 dark:border-slate-950 rounded-full hover:bg-blue-500 hover:scale-125 transition-all z-20 cursor-crosshair shadow-md node-interactive"
+                        title="Output"
+                        data-port-type="output"
+                        data-node-id={node.id}
+                        onMouseDown={(e) => handlePortMouseDown(e, 'output')}
+                    ></div>
+                )}
             </div>
 
             {/* Body */}
@@ -226,18 +230,50 @@ function CanvasNodeComponent({ node, scale, isSelected }: CanvasNodeProps) {
                 <div className="flex flex-col space-y-2">
                     {Object.entries(node.data)
                         .filter(([key]) => !['label', 'enabled', 'description', 'icon', 'locked'].includes(key))
+                        // Filter out monitoring stack keys if disabled
+                        .filter(([key]) => {
+                            if (node.type !== 'monitoring_stack') return true;
+
+                            const data = node.data;
+                            const isGrafanaEnabled = data.enable_grafana === true || data.enable_grafana === 'true';
+                            const isAlertmanagerEnabled = data.enable_alertmanager === true || data.enable_alertmanager === 'true';
+                            const isPrometheusEnabled = data.enable_prometheus === true || data.enable_prometheus === 'true';
+
+                            if (!isGrafanaEnabled && key.startsWith('grafana_')) return false;
+                            if (!isAlertmanagerEnabled && key.startsWith('alertmanager_')) return false;
+                            if (!isPrometheusEnabled && key.startsWith('prometheus_')) return false;
+
+                            return true;
+                        })
                         .reduce((acc, [key, value]) => {
-                            if (key === 'resources' && typeof value === 'object' && value !== null) {
+                            if ((key === 'resources' || key === 'kindConfig') && typeof value === 'object' && value !== null) {
                                 return [...acc, ...Object.entries(value)];
                             }
                             return [...acc, [key, value]];
                         }, [] as [string, any][])
+                        .sort((a, b) => {
+                            const priority = ['name', 'version', 'replicas', 'topology', 'networking', 'mounts'];
+                            const idxA = priority.indexOf(a[0]);
+                            const idxB = priority.indexOf(b[0]);
+                            if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+                            if (idxA !== -1) return -1;
+                            if (idxB !== -1) return 1;
+                            return a[0].localeCompare(b[0]);
+                        })
                         .map(([key, value]) => {
                             const isSensitive = isFieldSensitive(node.type, key);
                             return (
-                                <div key={key} className="flex justify-between items-center w-full">
-                                    <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{key}</span>
-                                    <span className="font-mono text-xs text-blue-600 dark:text-blue-400 font-bold truncate max-w-[60%] text-right" title={isSensitive ? 'Hidden' : (typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value))}>
+                                <div key={key} className="flex justify-between items-center w-full gap-2">
+                                    <span
+                                        className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate flex-1 min-w-0"
+                                        title={key}
+                                    >
+                                        {key}
+                                    </span>
+                                    <span
+                                        className="font-mono text-xs text-blue-600 dark:text-blue-400 font-bold truncate max-w-[50%] text-right shrink-0"
+                                        title={isSensitive ? 'Hidden' : (typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value))}
+                                    >
                                         {isSensitive
                                             ? '••••••••'
                                             : (typeof value === 'object' && value !== null

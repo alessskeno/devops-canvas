@@ -6,17 +6,31 @@ export const COMPONENT_REGISTRY: ComponentDefinition[] = [
         type: 'kind-cluster',
         name: 'Kind Cluster',
         description: 'Local Kubernetes cluster',
-        icon: 'Container',
+        icon: 'Boxes',
         category: 'infrastructure',
         color: 'text-blue-600 bg-blue-100 dark:text-blue-400 dark:bg-blue-900/30',
         defaultConfig: {
             label: 'Kind Cluster',
             kindConfig: {
                 name: 'dev-cluster',
-                version: 'v1.27.3',
+                version: '',
                 topology: { controlPlanes: 1, workers: 2 },
                 networking: { enableIngress: true },
                 mounts: []
+            }
+        }
+    },
+    {
+        type: 'docker-compose',
+        name: 'Docker Compose',
+        description: 'Local Docker Environment',
+        icon: 'Container',
+        category: 'infrastructure',
+        color: 'text-cyan-600 bg-cyan-100 dark:text-cyan-400 dark:bg-cyan-900/30',
+        defaultConfig: {
+            label: 'Docker Compose',
+            composeConfig: {
+                version: '3.8',
             }
         }
     },
@@ -87,33 +101,7 @@ export const COMPONENT_REGISTRY: ComponentDefinition[] = [
         defaultConfig: { label: 'Message Queue' }
     },
     // Monitoring
-    {
-        type: 'prometheus',
-        name: 'Prometheus',
-        description: 'Systems Monitoring',
-        icon: 'Activity',
-        category: 'monitoring',
-        color: 'text-red-600 bg-red-100 dark:text-red-400 dark:bg-red-900/30',
-        defaultConfig: { label: 'Prometheus' }
-    },
-    {
-        type: 'alertmanager',
-        name: 'Alertmanager',
-        description: 'Alerting System',
-        icon: 'Bell',
-        category: 'monitoring',
-        color: 'text-pink-600 bg-pink-100 dark:text-pink-400 dark:bg-pink-900/30',
-        defaultConfig: { label: 'Alertmanager' }
-    },
-    {
-        type: 'grafana',
-        name: 'Grafana',
-        description: 'Metric Visualization',
-        icon: 'BarChart',
-        category: 'monitoring',
-        color: 'text-orange-600 bg-orange-100 dark:text-orange-400 dark:bg-orange-900/30',
-        defaultConfig: { label: 'Grafana' }
-    },
+
     {
         type: 'monitoring_stack',
         name: 'Monitoring Stack',

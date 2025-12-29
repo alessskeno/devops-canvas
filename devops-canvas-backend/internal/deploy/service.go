@@ -4,6 +4,7 @@ import (
 	"context"
 	"devops-canvas-backend/internal/deploy/translator"
 	"devops-canvas-backend/internal/workspace"
+	"encoding/json"
     "fmt"
 )
 
@@ -36,159 +37,168 @@ func (s *Service) GenerateManifests(ctx context.Context, workspaceID string) (ma
 		return nil, fmt.Errorf("failed to fetch canvas: %w", err)
 	}
 
-	// 2. Initialize aggregated structures
+	// 2. Build Adjacency List for Graph Traversal
+    adj := make(map[string][]string)
+    for _, conn := range canvas.Connections {
+        adj[conn.SourceID] = append(adj[conn.SourceID], conn.TargetID)
+        adj[conn.TargetID] = append(adj[conn.TargetID], conn.SourceID)
+    }
+
+    // 3. Identify Infrastructure Contexts
+    kindNodes := []string{}
+    composeNodes := []string{}
+    for _, node := range canvas.Nodes {
+        if node.Type == "kind-cluster" {
+            kindNodes = append(kindNodes, node.ID)
+        } else if node.Type == "docker-compose" {
+            composeNodes = append(composeNodes, node.ID)
+        }
+    }
+
+    // 4. Determine Reachability
+    // If no infrastructure nodes exist, we default to "All Enabled" mode for backward compatibility
+    enableAll := len(kindNodes) == 0 && len(composeNodes) == 0
+    
+    inKindContext := make(map[string]bool)
+    inComposeContext := make(map[string]bool)
+
+    if enableAll {
+        // Mark all nodes as effectively in both contexts (or strictly, we just don't filter)
+        // But to keep logic simple, let's mark all as reachable
+        for _, node := range canvas.Nodes {
+            inKindContext[node.ID] = true
+            inComposeContext[node.ID] = true
+        }
+    } else {
+        // BFS for Kind Cluster
+        queue := append([]string{}, kindNodes...)
+        visited := make(map[string]bool)
+        for _, id := range kindNodes { visited[id] = true; inKindContext[id] = true }
+        
+        for len(queue) > 0 {
+            curr := queue[0]
+            queue = queue[1:]
+            
+            for _, neighbor := range adj[curr] {
+                if !visited[neighbor] {
+                    visited[neighbor] = true
+                    inKindContext[neighbor] = true
+                    queue = append(queue, neighbor)
+                }
+            }
+        }
+
+        // BFS for Docker Compose
+        queue = append([]string{}, composeNodes...)
+        visited = make(map[string]bool) // reset visited
+        for _, id := range composeNodes { visited[id] = true; inComposeContext[id] = true }
+        
+        for len(queue) > 0 {
+            curr := queue[0]
+            queue = queue[1:]
+            
+            for _, neighbor := range adj[curr] {
+                if !visited[neighbor] {
+                    visited[neighbor] = true
+                    inComposeContext[neighbor] = true
+                    queue = append(queue, neighbor)
+                }
+            }
+        }
+    }
+
+	// 5. Generate and Filter Manifests
 	composeServices := make(map[string]translator.ComposeService)
 	helmValues := make(map[string]interface{})
 	configs := make(map[string]string)
+    chartDependencies := []translator.ChartDependency{}
 
 	for _, node := range canvas.Nodes {
-        // Skip group nodes
-        if node.Type == "group" {
+        if node.Type == "group" || node.Type == "kind-cluster" || node.Type == "docker-compose" {
             continue
         }
 
-        // Generate manifest for this node
-        manifests, err := s.generator.GenerateManifests(node, canvas.Nodes)
-        if err != nil {
-            // Log error or skip? For now, we skip nodes that fail translation (e.g. file nodes might not have translator)
-            continue 
+        // Check if node is relevant for either context
+        relevantToCompose := inComposeContext[node.ID]
+        relevantToHelm := inKindContext[node.ID]
+
+        // Skip if not relevant to anything (orphaned node in infra-aware mode)
+        if !relevantToCompose && !relevantToHelm {
+            // Optional: Include strictly configured nodes? 
+            // For now, if you are not connected to Infra, you are not exported.
+            continue
         }
 
+        manifests, err := s.generator.GenerateManifests(node, canvas.Nodes, canvas.Connections)
+        if err != nil {
+            continue 
+        }
         if manifests == nil {
             continue
         }
 
-        // Merge Configs
+        // Merge Configs (Include if relevant to either)
         for k, v := range manifests.Configs {
             configs[k] = v
         }
 
-        // Add to Docker Compose Services
-        if manifests.DockerCompose != nil {
-            // Use node label or type+ID as service name?
-            // Generator doesn't return service name, it returns the struct.
-            // We usually name services by type-shortID.
+        // Add to Docker Compose Services (Only if relevant to Compose)
+        if relevantToCompose && manifests.DockerCompose != nil {
             serviceName := fmt.Sprintf("%s-%s", node.Type, node.ID[:4])
             composeServices[serviceName] = *manifests.DockerCompose
         }
 
-        // Merge Helm Values
-        if manifests.HelmValues != nil {
-             // Namespace values under the service name to support umbrella chart pattern
-             // and avoid collisions between components (e.g. both having "image" or "auth").
-             serviceName := fmt.Sprintf("%s-%s", node.Type, node.ID[:4])
-             helmValues[serviceName] = *manifests.HelmValues
-        }
-        
-        // Add Extra Compose Services (for bundled components like Monitoring Stack)
-        if len(manifests.ExtraComposeServices) > 0 {
-            for suffix, svc := range manifests.ExtraComposeServices {
-                // Name format: suffix-shortID (e.g. grafana-7a2b)
+        // Add Extra Compose Services (Only if relevant to Compose)
+        if relevantToCompose && len(manifests.ExtraComposeServices) > 0 {
+             for suffix, svc := range manifests.ExtraComposeServices {
                  name := fmt.Sprintf("%s-%s", suffix, node.ID[:4])
                  composeServices[name] = svc
             }
         }
+
+        // Merge Helm Values (Only if relevant to Helm)
+        if relevantToHelm && manifests.HelmValues != nil {
+             serviceName := fmt.Sprintf("%s-%s", node.Type, node.ID[:4])
+             helmValues[serviceName] = *manifests.HelmValues
+             
+             // Extract App Version from Node Data
+             var rawData map[string]interface{}
+             // We unmarshal again here purely for extracting the "version" field generically
+             // Optimization: We could have the Generator return the app version or pass it in context,
+             // but unmarshalling map is cheap enough for this loop.
+             // Actually, `node.Data` is `[]byte` JSON.
+             // We can do a quick check.
+             appVersion := "latest"
+             if err := json.Unmarshal(node.Data, &rawData); err == nil {
+                 if v, ok := rawData["version"].(string); ok && v != "" {
+                     appVersion = v
+                 }
+             }
+
+             // Get Dependency
+             dep := translator.GetChartDependency(node.Type, appVersion)
+             dep.Alias = serviceName
+             
+             if dep.Name != "" {
+                 chartDependencies = append(chartDependencies, dep)
+             }
+        }
     }
     
-    // 3. Collect Top-Level Volumes
+    // 6. Collect Top-Level Volumes (From filtered services)
     volumes := make(map[string]interface{})
     for _, service := range composeServices {
         for _, vol := range service.Volumes {
-            // Check if it's a named volume (simple check: doesn't start with . or /)
-            // Volume format: "name:path" or "./path:path"
             parts := []rune(vol)
             if len(parts) > 0 && parts[0] != '.' && parts[0] != '/' {
-                // It's likely a named volume, split by colon if present to get name
-                 // e.g. "postgres_data:/var/lib/postgresql/data" -> "postgres_data"
-                 volParts := splitString(vol, ':') // Helper or inline
+                 volParts := splitString(vol, ':')
                  if len(volParts) > 0 {
                      volName := volParts[0]
-                     // Verify again it's not a path (absolute path on windows?)
-                     // Just assuming safe check for linux/unix style paths (.) and (/)
                      if len(volName) > 0 && volName[0] != '.' && volName[0] != '/' {
                          volumes[volName] = map[string]interface{}{}
                      }
                  }
             }
-        }
-    }
-
-    // 4. Generate Chart.yaml Dependencies
-    chartDependencies := []translator.ChartDependency{}
-    for _, node := range canvas.Nodes {
-        var dep translator.ChartDependency
-        serviceName := fmt.Sprintf("%s-%s", node.Type, node.ID[:4])
-        
-        // Define mapping for known types
-        switch node.Type {
-        case "postgres":
-            dep = translator.ChartDependency{
-                Name:       "postgresql",
-                Version:    "12.12.10", // Example stable version, should ideally match what translator expects
-                Repository: "https://charts.bitnami.com/bitnami",
-                Alias:      serviceName,
-            }
-        case "redis":
-            dep = translator.ChartDependency{
-                Name:       "redis",
-                Version:    "17.15.6",
-                Repository: "https://charts.bitnami.com/bitnami",
-                Alias:      serviceName,
-            }
-        case "mysql":
-            dep = translator.ChartDependency{
-                Name:       "mysql",
-                Version:    "9.12.2",
-                Repository: "https://charts.bitnami.com/bitnami",
-                Alias:      serviceName,
-            }
-        case "kafka":
-            dep = translator.ChartDependency{
-                Name:       "kafka",
-                Version:    "26.4.2",
-                Repository: "https://charts.bitnami.com/bitnami",
-                Alias:      serviceName,
-            }
-        case "prometheus":
-             dep = translator.ChartDependency{
-                Name:       "prometheus",
-                Version:    "25.4.0", // kube-prometheus-stack usually
-                Repository: "https://prometheus-community.github.io/helm-charts",
-                Alias:      serviceName,
-            }
-        case "alertmanager":
-             dep = translator.ChartDependency{
-                Name:       "alertmanager",
-                Version:    "1.3.0",
-                Repository: "https://prometheus-community.github.io/helm-charts",
-                Alias:      serviceName,
-            }
-        case "valkey":
-            dep = translator.ChartDependency{
-                Name:       "valkey",
-                Version:    "1.0.0", // Assuming initial stable chart
-                Repository: "https://charts.bitnami.com/bitnami", // Valkey is available in Bitnami
-                Alias:      serviceName,
-            }
-        case "grafana":
-            dep = translator.ChartDependency{
-                Name:       "grafana",
-                Version:    "8.0.0", // Recent stable version
-                Repository: "https://grafana.github.io/helm-charts",
-                Alias:      serviceName,
-            }
-        case "monitoring_stack":
-             dep = translator.ChartDependency{
-                Name:       "kube-prometheus-stack",
-                Version:    "56.0.0", // Stable version as per user request
-                Repository: "https://prometheus-community.github.io/helm-charts",
-                Alias:      serviceName,
-            }
-        // Add others as needed
-        }
-        
-        if dep.Name != "" {
-            chartDependencies = append(chartDependencies, dep)
         }
     }
 
@@ -202,14 +212,25 @@ func (s *Service) GenerateManifests(ctx context.Context, workspaceID string) (ma
 
     // Construct final result
     result := map[string]interface{}{
-        "docker_compose": map[string]interface{}{
+        "configs":     configs,
+    }
+
+    // Only include Docker Compose if we have content or if explicitly in compose mode (and empty?)
+    // User requested: "preview manifest must show Chart.yaml and helm values... docker compose component... must show Docker compose"
+    // So if I am in Kind mode, I should probably omit docker_compose?
+    // Let's rely on content. But if enableAll is true, we output both.
+    
+    if len(composeServices) > 0 || (enableAll || len(composeNodes) > 0) {
+         result["docker_compose"] = map[string]interface{}{
             "version": "3.8",
             "services": composeServices,
             "volumes":  volumes,
-        },
-        "helm_values": helmValues,
-        "chart_yaml":  chartMetadata,
-        "configs":     configs,
+        }
+    }
+
+    if len(helmValues) > 0 || (enableAll || len(kindNodes) > 0) {
+        result["helm_values"] = helmValues
+        result["chart_yaml"] = chartMetadata
     }
 
     return result, nil

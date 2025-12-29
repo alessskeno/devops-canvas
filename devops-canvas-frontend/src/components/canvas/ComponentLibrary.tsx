@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Database, Box, Layers, Archive, MessageSquare, BarChart2, Star, Activity, FileText, Bell } from 'lucide-react';
+import { Search, Database, Box, Layers, Archive, MessageSquare, BarChart2, Star, Activity, FileText, Bell, Boxes, Container } from 'lucide-react';
 import { HighlightedText } from '../shared/HighlightedText';
 import { COMPONENT_REGISTRY } from '../../utils/componentRegistry';
 import { ComponentDefinition } from '../../types';
@@ -77,7 +77,9 @@ export function ComponentLibrary() {
                         {/* Icon Box */}
                         <div className={`w-10 h-10 flex items-center justify-center rounded-lg shrink-0 mr-3 ${component.color || 'bg-blue-50 text-blue-600 dark:bg-gray-700 dark:text-blue-400'}`}>
                             {component.icon === 'Database' && <Database size={20} />}
-                            {component.icon === 'Container' && <Box size={20} />}
+                            {component.icon === 'Container' && <Container size={20} />}
+                            {component.icon === 'Box' && <Box size={20} />}
+                            {component.icon === 'Boxes' && <Boxes size={20} />}
                             {component.icon === 'Layers' && <Layers size={20} />}
                             {component.icon === 'Activity' && <Activity size={20} />}
                             {component.icon === 'BarChart' && <BarChart2 size={20} />}

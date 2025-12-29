@@ -9,6 +9,7 @@ import { COMPONENT_REGISTRY } from '../../utils/componentRegistry';
 import { COMPONENT_CONFIG_SCHEMAS, ConfigField } from '../../utils/componentConfigSchemas';
 import { KindClusterConfigForm } from './KindClusterConfigForm';
 import { AlertmanagerConfigForm } from './AlertmanagerConfigForm';
+import api from '../../utils/api';
 
 export function ConfigPanel() {
     const {
@@ -17,11 +18,54 @@ export function ConfigPanel() {
     } = useCanvasStore();
 
     const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+    const [dynamicOptions, setDynamicOptions] = useState<Record<string, { label: string; value: string }[]>>({});
+    const [loadingVersions, setLoadingVersions] = useState<Record<string, boolean>>({});
 
     // Default to 'General' if undefined
     const currentTab = activePanelTab || 'General';
 
     const selectedNode = nodes.find(n => n.id === selectedNodeId);
+
+    // Convert to ref or use effect dependency carefully to avoid infinite loops
+    React.useEffect(() => {
+        if (!selectedNode) return;
+        const schema = COMPONENT_CONFIG_SCHEMAS[selectedNode.type];
+        if (!schema) return;
+
+        // Reset options when switching node types
+        setDynamicOptions({});
+
+        schema.forEach(async (field) => {
+            if (field.dynamicOptions) {
+                try {
+                    setLoadingVersions(prev => ({ ...prev, [field.key]: true }));
+                    const res = await api.get(`/components/${selectedNode.type}/versions`);
+                    if (res.data && Array.isArray(res.data) && res.data.length > 0) {
+                        setDynamicOptions(prev => ({
+                            ...prev,
+                            [field.key]: res.data
+                        }));
+
+                        // Auto-select the latest version if none is currently selected (or if it's currently hardcoded/stale)
+                        // logic: if node data value for this field is empty, or equals the old default, update it.
+                        // But simplest is: if empty, take the first.
+                        const currentVal = selectedNode.data[field.key];
+                        if (!currentVal && res.data.length > 0) {
+                            // We need to update the node data. 
+                            // NOTE: We cannot call updateNodeData directly inside this loop without causing state issues or race conditions 
+                            // if multiple fields update. But here only 'version' is dynamic.
+                            // Actually, we can use the handleChange exposed logic or call updateNodeData store action.
+                            updateNodeData(selectedNodeId, { [field.key]: res.data[0].value });
+                        }
+                    }
+                } catch (error) {
+                    console.error(`Failed to fetch versions for ${selectedNode.type}`, error);
+                } finally {
+                    setLoadingVersions(prev => ({ ...prev, [field.key]: false }));
+                }
+            }
+        });
+    }, [selectedNode?.type]);
 
     if (!selectedNode) return null;
 
@@ -40,8 +84,14 @@ export function ConfigPanel() {
                     label={field.label}
                     value={selectedNode.data[field.key] || field.defaultValue || ''}
                     onChange={(e) => handleChange(field.key, e.target.value)}
-                    options={field.options || []}
-                    disabled={isLocked}
+                    options={
+                        field.dynamicOptions
+                            ? (loadingVersions[field.key]
+                                ? [{ label: 'Loading versions...', value: '' }]
+                                : (dynamicOptions[field.key] || []))
+                            : (field.options || [])
+                    }
+                    disabled={isLocked || (field.dynamicOptions && loadingVersions[field.key])}
                 />
             ) : field.type === 'textarea' ? (
                 <div>

@@ -134,13 +134,33 @@ func (t *PostgresTranslator) Translate(node models.Node, ctx TranslationContext)
     }
     
     // Additional configuration via 'primary.configuration' or 'postgresqlConfiguration'
+    // Additional configuration via 'primary.configuration' or 'postgresqlConfiguration'
     extraConfig := ""
+    // Always set port in config to match service
+    extraConfig += fmt.Sprintf("port = %s\n", port)
+    
     if config.SharedBuffers != "" {
         extraConfig += fmt.Sprintf("shared_buffers = %s\n", config.SharedBuffers)
     }
     if config.MaxConnections != nil {
         extraConfig += fmt.Sprintf("max_connections = %v\n", config.MaxConnections)
     }
+    if config.ListenAddresses != "" {
+        extraConfig += fmt.Sprintf("listen_addresses = '%s'\n", config.ListenAddresses)
+    }
+    if config.WorkMem != "" {
+        extraConfig += fmt.Sprintf("work_mem = %s\n", config.WorkMem)
+    }
+    if config.MaintenanceWorkMem != "" {
+        extraConfig += fmt.Sprintf("maintenance_work_mem = %s\n", config.MaintenanceWorkMem)
+    }
+    if config.EffectiveCacheSize != "" {
+        extraConfig += fmt.Sprintf("effective_cache_size = %s\n", config.EffectiveCacheSize)
+    }
+    if config.MaxWalSize != "" {
+        extraConfig += fmt.Sprintf("max_wal_size = %s\n", config.MaxWalSize)
+    }
+
     if extraConfig != "" {
          helm["primary"].(map[string]interface{})["extendedConfiguration"] = extraConfig
     }
@@ -156,6 +176,75 @@ func (t *PostgresTranslator) Translate(node models.Node, ctx TranslationContext)
               _ = json.Unmarshal(fileNode.Data, &fileConfig)
               helm["primary"].(map[string]interface{})["pgHbaConfiguration"] = fileConfig.Content
           }
+    }
+
+    // --- Monitoring Integration ---
+    if ctx.FindConnectedNodes != nil {
+        connected, _ := ctx.FindConnectedNodes(node.ID)
+        for _, neighbor := range connected {
+            if neighbor.Type == "monitoring_stack" {
+                helm["metrics"] = map[string]interface{}{
+                    "enabled": true,
+                    "serviceMonitor": map[string]interface{}{
+                        "enabled": true,
+                         // labels keys might need to be specific if charts require it, 
+                         // but typically empty is fine if selectors are empty.
+                         // But for completeness:
+                         "labels": map[string]interface{}{
+                             "release": "devops-canvas-chart",
+                         },
+                    },
+                    "prometheusRule": map[string]interface{}{
+                        "enabled": true,
+                        "labels": map[string]interface{}{
+                             "release": "devops-canvas-chart",
+                        },
+                        "rules": []map[string]interface{}{
+                            {
+                                "alert": "PostgresDown",
+                                "expr": fmt.Sprintf(`pg_up{service="%s"} == 0`, fmt.Sprintf("postgres-%s-headless", node.ID[:4])), // Update service name logic if needed. Bitnami often creates headless or standard svc.
+                                // Actually, Bitnami's generated SM will point to the svc.
+                                // The generic query `pg_up` matches on `service` label which usually matches K8s service name.
+                                // Bitnami postgres service name `fullname` is usually passed.
+                                // Careful with service name override. I kept fullnameOverride before.
+                                "for": "1m",
+                                "labels": map[string]interface{}{
+                                    "severity": "critical",
+                                },
+                                "annotations": map[string]interface{}{
+                                    "summary": "Postgres instance {{ $labels.instance }} down",
+                                    "description": "Postgres has been down for more than 1 minute.",
+                                },
+                            },
+                            {
+                                "alert": "PostgresConnectionsHigh",
+                                "expr": fmt.Sprintf(`sum(pg_stat_activity_count) by (service) > %v * 0.8`, func() int {
+                                    if config.MaxConnections != nil {
+                                        return defaultPort(config.MaxConnections, 100) // Helper? No, manually cast
+                                         if f, ok := config.MaxConnections.(float64); ok { return int(f) }
+                                         return 100
+                                    }
+                                    return 100
+                                }()),
+                                "for": "5m",
+                                "labels": map[string]interface{}{
+                                    "severity": "warning",
+                                },
+                                "annotations": map[string]interface{}{
+                                    "summary": "High connection count",
+                                },
+                            },
+                        },
+                    },
+                }
+
+                // 2. Set fullnameOverride to ensure predictable Service names for alerts/monitors
+                helm["fullnameOverride"] = fmt.Sprintf("postgres-%s", node.ID[:4])
+                
+                // No external file generation needed!
+                break // Only need to connect to one monitoring stack
+            }
+        }
     }
 
     return &GeneratedManifests{
