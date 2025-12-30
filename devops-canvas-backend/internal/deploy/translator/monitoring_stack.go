@@ -131,10 +131,7 @@ func (t *MonitoringStackTranslator) Translate(node models.Node, ctx TranslationC
 		    "scrape_configs": []interface{}{},
 	    }
 	    
-<<<<<<< HEAD
-=======
         // ... (Keep existing scrape config logic) ...
->>>>>>> ecd65c4 (Recovered from git corruption [skip ci])
         // Robust Scrape Config Parsing (Multi-Doc Support)
 	    if scrapeConfigContent != "" {
 		    // Use YAML Decoder to handle multiple documents
@@ -195,10 +192,7 @@ func (t *MonitoringStackTranslator) Translate(node models.Node, ctx TranslationC
 	    }
         
         // Handle Rules for Docker
-<<<<<<< HEAD
-=======
         // ... (Keep existing rules logic) ...
->>>>>>> ecd65c4 (Recovered from git corruption [skip ci])
         if rulesContent != "" {
              // Logic to extract valid Prometheus config if input is CRD
              var dockerRulesContent string
@@ -239,10 +233,7 @@ func (t *MonitoringStackTranslator) Translate(node models.Node, ctx TranslationC
 			    "--storage.tsdb.retention.time=" + config.PrometheusRetention,
 		    },
 		    Restart: "always",
-<<<<<<< HEAD
-=======
             Deploy: deployConfig,
->>>>>>> ecd65c4 (Recovered from git corruption [skip ci])
 	    }
         // Add rules mount if rules exist
         if rulesContent != "" {
@@ -266,10 +257,7 @@ func (t *MonitoringStackTranslator) Translate(node models.Node, ctx TranslationC
 		    },
 		    Command: []string{"--storage.path=/alertmanager", "--config.file=/etc/alertmanager/config.yml"},
 		    Restart: "always",
-<<<<<<< HEAD
-=======
             Deploy: deployConfig,
->>>>>>> ecd65c4 (Recovered from git corruption [skip ci])
 	    }
     }
 
@@ -285,10 +273,7 @@ func (t *MonitoringStackTranslator) Translate(node models.Node, ctx TranslationC
 		    },
 		    Volumes: []string{"grafana_data_" + node.ID + ":/var/lib/grafana"},
 		    Restart: "always",
-<<<<<<< HEAD
-=======
             Deploy: deployConfig,
->>>>>>> ecd65c4 (Recovered from git corruption [skip ci])
 	    }
     }
 
@@ -332,15 +317,12 @@ func (t *MonitoringStackTranslator) Translate(node models.Node, ctx TranslationC
             "serviceMonitorSelector": map[string]interface{}{},
             "ruleSelector": map[string]interface{}{},
 	    }
-<<<<<<< HEAD
 	    
-=======
         if helmResources != nil {
             promSpec["resources"] = helmResources
         }
 	    
         // ... (Keep existing Scrape Config logic) ...
->>>>>>> ecd65c4 (Recovered from git corruption [skip ci])
         // Scrape Config for Helm
 	    if scrapeConfigContent != "" {
             decoder := yaml.NewDecoder(strings.NewReader(scrapeConfigContent))
@@ -406,26 +388,6 @@ func (t *MonitoringStackTranslator) Translate(node models.Node, ctx TranslationC
 	// Alertmanager
     if enableAlertmanager {
 	    amConfig := map[string]interface{}{}
-<<<<<<< HEAD
-	    if err := yaml.Unmarshal([]byte(alertmanagerConfigContent), &amConfig); err == nil {
-            helm["alertmanager"] = map[string]interface{}{
-                "enabled": true,
-                "config": amConfig,
-                "alertmanagerSpec": map[string]interface{}{
-                    "retention": config.AlertmanagerRetention,
-                },
-            }
-	    } else {
-            helm["alertmanager"] = map[string]interface{}{
-                "enabled": true,
-                "alertmanagerSpec": map[string]interface{}{
-                    "retention": config.AlertmanagerRetention,
-                },
-            }
-        }
-    } else {
-        helm["alertmanager"] = map[string]interface{}{
-=======
 	    _ = yaml.Unmarshal([]byte(alertmanagerConfigContent), &amConfig) // Ignore error, empty map if fails
         
         amSpec := map[string]interface{}{
@@ -442,18 +404,13 @@ func (t *MonitoringStackTranslator) Translate(node models.Node, ctx TranslationC
         }
     } else {
         helm["alertmanager"] = map[string]interface{}{
->>>>>>> ecd65c4 (Recovered from git corruption [skip ci])
             "enabled": false,
         }
     }
 
 	// Grafana
     if enableGrafana {
-<<<<<<< HEAD
-	    helm["grafana"] = map[string]interface{}{
-=======
         grafanaMap := map[string]interface{}{
->>>>>>> ecd65c4 (Recovered from git corruption [skip ci])
             "enabled": true,
 		    "adminUser":     config.GrafanaAdminUser,
 		    "adminPassword": config.GrafanaAdminPassword,
@@ -462,15 +419,11 @@ func (t *MonitoringStackTranslator) Translate(node models.Node, ctx TranslationC
 				    "allow_sign_up": config.GrafanaAllowSignUp,
 			    },
 		    },
-<<<<<<< HEAD
-	    }
-=======
         }
         if helmResources != nil {
             grafanaMap["resources"] = helmResources
         }
 	    helm["grafana"] = grafanaMap
->>>>>>> ecd65c4 (Recovered from git corruption [skip ci])
     } else {
         helm["grafana"] = map[string]interface{}{
             "enabled": false,
