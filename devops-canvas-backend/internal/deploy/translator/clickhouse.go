@@ -218,62 +218,7 @@ func (t *ClickHouseTranslator) Translate(node models.Node, ctx TranslationContex
         }
     }
 
-    // --- Advanced Configuration (XML Injection) ---
-    
-    // 1. configdFiles (Server Settings)
-    configdXML := "<clickhouse>\n"
-    hasConfigd := false
-    
-    // Max Connections
-    if config.MaxConnections != nil {
-        configdXML += fmt.Sprintf("    <max_connections>%v</max_connections>\n", config.MaxConnections)
-        hasConfigd = true
-    }
-    // Max Concurrent Queries
-    if config.MaxConcurrentQueries != nil {
-        configdXML += fmt.Sprintf("    <max_concurrent_queries>%v</max_concurrent_queries>\n", config.MaxConcurrentQueries)
-        hasConfigd = true
-    }
-    // Explicit Ports in XML (optional but good for consistency if overriding)
-    if tcpPort != "9000" {
-        configdXML += fmt.Sprintf("    <tcp_port>%s</tcp_port>\n", tcpPort)
-        hasConfigd = true
-    }
-    if httpPort != "8123" {
-        configdXML += fmt.Sprintf("    <http_port>%s</http_port>\n", httpPort)
-        hasConfigd = true
-    }
-    configdXML += "</clickhouse>"
 
-    if hasConfigd {
-        // Currently helm root is flat structure mimicking Chart values? 
-        // Bitnami charts usually have `image`, `auth`, etc. at top level.
-        // But for ClickHouse, `configdFiles` is usually at top level or under specific section depending on chart.
-        // Assuming official Bitnami struct: top level `configdFiles`.
-        helm["configdFiles"] = map[string]string{
-            "99-server-tuning.xml": configdXML,
-        }
-    }
-
-    // 2. usersdFiles (User Profile Settings)
-    usersdXML := "<clickhouse>\n    <profiles>\n        <default>\n"
-    hasUsersd := false
-    
-    if config.MaxMemoryUsage != "" {
-        usersdXML += fmt.Sprintf("            <max_memory_usage>%s</max_memory_usage>\n", config.MaxMemoryUsage)
-        hasUsersd = true
-    }
-    if config.MaxThreads != nil {
-         usersdXML += fmt.Sprintf("            <max_threads>%v</max_threads>\n", config.MaxThreads)
-         hasUsersd = true
-    }
-    usersdXML += "        </default>\n    </profiles>\n</clickhouse>"
-
-    if hasUsersd {
-        helm["usersdFiles"] = map[string]string{
-            "99-user-tuning.xml": usersdXML,
-        }
-    }
 
     // 3. Container Ports
     helm["containerPorts"] = map[string]interface{}{
