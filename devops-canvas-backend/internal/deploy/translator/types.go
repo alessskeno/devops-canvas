@@ -8,6 +8,20 @@ type ComposeService struct {
 	Volumes     []string          `yaml:"volumes,omitempty" json:"volumes,omitempty"`
 	Command     []string          `yaml:"command,omitempty" json:"command,omitempty"`
 	Restart     string            `yaml:"restart,omitempty" json:"restart,omitempty"`
+    Deploy      *DeployConfig     `yaml:"deploy,omitempty" json:"deploy,omitempty"`
+}
+
+type DeployConfig struct {
+    Resources *ResourcesBlock `yaml:"resources,omitempty" json:"resources,omitempty"`
+}
+
+type ResourcesBlock struct {
+    Limits ResourceLimits `yaml:"limits,omitempty" json:"limits,omitempty"`
+}
+
+type ResourceLimits struct {
+    CPUs   string `yaml:"cpus,omitempty" json:"cpus,omitempty"`
+    Memory string `yaml:"memory,omitempty" json:"memory,omitempty"`
 }
 
 // HelmValues represents a generic structure for values.yaml
@@ -42,4 +56,15 @@ type ChartMetadata struct {
     Version      string            `yaml:"version" json:"version"`
     Description  string            `yaml:"description,omitempty" json:"description,omitempty"`
     Dependencies []ChartDependency `yaml:"dependencies,omitempty" json:"dependencies,omitempty"`
+}
+// ResourceConfig defines CPU and Memory limits
+type ResourceConfig struct {
+    CPU    float64 `json:"cpu,omitempty"`
+    Memory string  `json:"memory,omitempty"`
+}
+
+// CommonConfig defines fields shared across most components
+type CommonConfig struct {
+    Enabled   *bool           `json:"enabled,omitempty"` // Pointer to distinguish false vs missing (default true usually)
+    Resources *ResourceConfig `json:"resources,omitempty"`
 }

@@ -57,8 +57,9 @@ func (g *ManifestGenerator) GenerateManifests(node models.Node, allNodes []model
     if err != nil {
         return nil, err
     }
+    // Result nil means component is disabled or skipped
     if result == nil {
-        return nil, fmt.Errorf("translator returned nil result")
+        return nil, nil
     }
 
 	return result, nil

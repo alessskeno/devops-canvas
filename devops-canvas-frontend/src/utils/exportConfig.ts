@@ -1,5 +1,31 @@
 import { CanvasNode, Connection } from '../types';
 import { isFieldSensitive } from './security';
+import yaml from 'js-yaml';
+
+const sanitizeData = (data: any, componentType: string): any => {
+    if (!data) return data;
+    if (Array.isArray(data)) {
+        return data.map(item => sanitizeData(item, componentType));
+    }
+    if (typeof data === 'object') {
+        const sanitized: any = {};
+        for (const [key, value] of Object.entries(data)) {
+            // Check if this specific field is sensitive for this component type
+            if (isFieldSensitive(componentType, key)) {
+                sanitized[key] = '********';
+            } else {
+                // Recursively sanitize, passing the component type down
+                // Note: Nested objects might not strictly follow the top-level schema check, 
+                // but usually sensitive fields are unique enough or we recurse.
+                // However, isFieldSensitive likely checks the top-level keys.
+                // If value is an object, we should recurse.
+                sanitized[key] = sanitizeData(value, componentType);
+            }
+        }
+        return sanitized;
+    }
+    return data;
+};
 
 export const generateConfig = (
     nodes: CanvasNode[],
@@ -7,80 +33,28 @@ export const generateConfig = (
     format: 'yaml' | 'json',
     excludeSecrets: boolean
 ): string => {
+    let exportedNodes = nodes;
+
+    if (excludeSecrets) {
+        exportedNodes = nodes.map(node => ({
+            ...node,
+            data: sanitizeData(node.data, node.type)
+        }));
+    }
+
     const config: Record<string, any> = {
         version: '1.0',
-        services: {}
+        nodes: exportedNodes,
+        connections: connections
     };
 
-    nodes.forEach(node => {
-        // Skip config files from the main services list, they are attachments
-        if (node.type === 'file') return;
-
-        // Create a specialized ID/Name for the service
-        const serviceName = `${node.type}-${node.id.slice(0, 4)}`;
-        const serviceData: Record<string, any> = {};
-
-        // Iterate through all data fields
-        Object.entries(node.data).forEach(([key, value]) => {
-            // Skip UI-only fields
-            if (['label', 'enabled', 'description', 'icon', 'locked', 'componentId'].includes(key)) return;
-
-            // Check sensitivity
-            if (excludeSecrets && isFieldSensitive(node.type, key)) {
-                return; // Exclude sensitive data
-            }
-
-            serviceData[key] = value;
-        });
-
-        // Add type info
-        serviceData['_type'] = node.type;
-        serviceData['_label'] = node.data.label;
-
-        config.services[serviceName] = serviceData;
-    });
+    // Services generation removed as per user request for "only canvas state"
+    // The previous logic transformed nodes into a simplified "services" map for GitOps.
+    // If we need this back, we should add a specific toggle for "Include Service Config".
 
     if (format === 'json') {
         return JSON.stringify(config, null, 2);
     } else {
-        return toYaml(config);
+        return yaml.dump(config);
     }
 };
-
-/**
- * Simple YAML serializer for basic configuration objects.
- * Supports nested objects and arrays.
- */
-function toYaml(obj: any, indentLevel = 0): string {
-    const indent = ' '.repeat(indentLevel);
-
-    if (obj === null || obj === undefined) return '';
-
-    if (typeof obj !== 'object') {
-        return String(obj);
-    }
-
-    if (Array.isArray(obj)) {
-        return obj.map(item => {
-            if (typeof item === 'object') {
-                return `${indent}- \n${toYaml(item, indentLevel + 2).replace(/^\s+/, indent + '  ')}`;
-            }
-            return `${indent}- ${item}`;
-        }).join('\n');
-    }
-
-    return Object.entries(obj).map(([key, value]) => {
-        if (value === undefined) return '';
-
-        if (typeof value === 'object' && value !== null) {
-            if (Array.isArray(value) && value.length === 0) {
-                return `${indent}${key}: []`;
-            }
-            const nested = toYaml(value, indentLevel + 2);
-            if (!nested.trim()) return `${indent}${key}: {}`;
-            return `${indent}${key}:\n${nested}`;
-        }
-
-        return `${indent}${key}: ${value}`;
-    }).filter(line => line !== '').join('\n');
-}

@@ -7,6 +7,7 @@ import (
 )
 
 type RedisConfig struct {
+    CommonConfig                 // Embed Enabled and Resources
     Version         string `json:"version"`
     Port            any    `json:"port"`
     Password        string `json:"requirepass,omitempty"` // Key is "requirepass" in frontend
@@ -21,6 +22,11 @@ func (t *RedisTranslator) Translate(node models.Node, ctx TranslationContext) (*
     var config RedisConfig
     if err := json.Unmarshal(node.Data, &config); err != nil {
         return nil, fmt.Errorf("failed to parse redis config: %v", err)
+    }
+
+    // Check Enabled
+    if config.Enabled != nil && !*config.Enabled {
+        return nil, nil
     }
 
     // Default values
@@ -62,6 +68,23 @@ func (t *RedisTranslator) Translate(node models.Node, ctx TranslationContext) (*
         Command:     command,
         Restart:     "always",
     }
+    
+    // Resource Limits for Docker Compose
+    if config.Resources != nil {
+        compose.Deploy = &DeployConfig{
+            Resources: &ResourcesBlock{Limits: ResourceLimits{}},
+        }
+        hasLimit := false
+        if config.Resources.CPU > 0 {
+            compose.Deploy.Resources.Limits.CPUs = fmt.Sprintf("%.1f", config.Resources.CPU)
+            hasLimit = true
+        }
+        if config.Resources.Memory != "" && config.Resources.Memory != "0" {
+            compose.Deploy.Resources.Limits.Memory = config.Resources.Memory
+            hasLimit = true
+        }
+        if !hasLimit { compose.Deploy = nil }
+    }
 
     // Helm Values (Bitnami structure)
     helm := make(HelmValues)
@@ -81,6 +104,30 @@ func (t *RedisTranslator) Translate(node models.Node, ctx TranslationContext) (*
         "persistence": map[string]interface{}{
             "enabled": true,
         },
+    }
+    
+    // Resource Limits for Helm
+    if config.Resources != nil {
+        resources := map[string]interface{}{}
+        limits := map[string]interface{}{}
+        requests := map[string]interface{}{}
+        
+        hasResource := false
+        if config.Resources.CPU > 0 {
+            limits["cpu"] = fmt.Sprintf("%.1f", config.Resources.CPU)
+            requests["cpu"] = fmt.Sprintf("%.1fm", config.Resources.CPU * 500)
+            hasResource = true
+        }
+        if config.Resources.Memory != "" && config.Resources.Memory != "0" {
+            limits["memory"] = config.Resources.Memory
+            requests["memory"] = config.Resources.Memory
+            hasResource = true
+        }
+        if hasResource {
+            resources["limits"] = limits
+            resources["requests"] = requests
+            helm["master"].(map[string]interface{})["resources"] = resources
+        }
     }
     
     // Add extra flags for Helm via command arguments if chart supports it, or config map

@@ -7,6 +7,7 @@ import (
 )
 
 type KafkaConfig struct {
+    CommonConfig                 // Embed Enabled and Resources
     Brokers           any    `json:"brokers,omitempty"`
     RetentionMs       any    `json:"retention_ms,omitempty"`
     RetentionBytes    string `json:"retention_bytes,omitempty"`
@@ -22,6 +23,11 @@ func (t *KafkaTranslator) Translate(node models.Node, ctx TranslationContext) (*
     var config KafkaConfig
     if err := json.Unmarshal(node.Data, &config); err != nil {
         return nil, fmt.Errorf("failed to parse kafka config: %v", err)
+    }
+
+    // Check Enabled
+    if config.Enabled != nil && !*config.Enabled {
+        return nil, nil
     }
 
     version := config.Version
@@ -60,10 +66,51 @@ func (t *KafkaTranslator) Translate(node models.Node, ctx TranslationContext) (*
         Volumes:     []string{"kafka_data_" + node.ID + ":/bitnami/kafka"},
         Restart:     "always",
     }
+    
+    // Resource Limits for Docker Compose
+    if config.Resources != nil {
+        compose.Deploy = &DeployConfig{
+            Resources: &ResourcesBlock{Limits: ResourceLimits{}},
+        }
+        hasLimit := false
+        if config.Resources.CPU > 0 {
+            compose.Deploy.Resources.Limits.CPUs = fmt.Sprintf("%.1f", config.Resources.CPU)
+            hasLimit = true
+        }
+        if config.Resources.Memory != "" && config.Resources.Memory != "0" {
+            compose.Deploy.Resources.Limits.Memory = config.Resources.Memory
+            hasLimit = true
+        }
+        if !hasLimit { compose.Deploy = nil }
+    }
 
     helm := make(HelmValues)
     helm["image"] = map[string]interface{}{
         "tag": version,
+    }
+    
+    // Resource Limits for Helm
+    if config.Resources != nil {
+        resources := map[string]interface{}{}
+        limits := map[string]interface{}{}
+        requests := map[string]interface{}{}
+        
+        hasResource := false
+        if config.Resources.CPU > 0 {
+            limits["cpu"] = fmt.Sprintf("%.1f", config.Resources.CPU)
+            requests["cpu"] = fmt.Sprintf("%.1fm", config.Resources.CPU * 500)
+            hasResource = true
+        }
+        if config.Resources.Memory != "" && config.Resources.Memory != "0" {
+            limits["memory"] = config.Resources.Memory
+            requests["memory"] = config.Resources.Memory
+            hasResource = true
+        }
+        if hasResource {
+            resources["limits"] = limits
+            resources["requests"] = requests
+            helm["resources"] = resources
+        }
     }
     // Bitnami Kafka Chart Values
     helm["deleteTopicEnable"] = true

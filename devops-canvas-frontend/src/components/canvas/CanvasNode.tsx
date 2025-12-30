@@ -294,10 +294,20 @@ function CanvasNodeComponent({ node, scale, isSelected }: CanvasNodeProps) {
 
                 {/* Status Indicator (Simplified) */}
                 <div className="mt-3">
-                    <span className="inline-flex items-center text-[10px] font-bold text-emerald-600 dark:text-emerald-500 bg-emerald-50 dark:bg-slate-900 border border-emerald-100 dark:border-slate-800 px-2 py-0.5 rounded-full">
-                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
-                        Ready
-                    </span>
+                    {/* Status Indicator (Simplified) */}
+                    <div className="mt-3">
+                        {node.data.enabled !== false ? (
+                            <span className="inline-flex items-center text-[10px] font-bold text-emerald-600 dark:text-emerald-500 bg-emerald-50 dark:bg-slate-900 border border-emerald-100 dark:border-slate-800 px-2 py-0.5 rounded-full">
+                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
+                                Ready
+                            </span>
+                        ) : (
+                            <span className="inline-flex items-center text-[10px] font-bold text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-2 py-0.5 rounded-full">
+                                <div className="w-1.5 h-1.5 rounded-full bg-slate-400 mr-1.5"></div>
+                                Disabled
+                            </span>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>

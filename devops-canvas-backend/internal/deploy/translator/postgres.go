@@ -7,6 +7,7 @@ import (
 )
 
 type PostgresConfig struct {
+    CommonConfig       // Embed Enabled and Resources
     Version            string `json:"version"`
     Port               any    `json:"port"`
     User               string `json:"user,omitempty"`
@@ -27,6 +28,11 @@ func (t *PostgresTranslator) Translate(node models.Node, ctx TranslationContext)
     var config PostgresConfig
     if err := json.Unmarshal(node.Data, &config); err != nil {
         return nil, fmt.Errorf("failed to parse postgres config: %v", err)
+    }
+
+    // Check Enabled status (default to true if nil)
+    if config.Enabled != nil && !*config.Enabled {
+        return nil, nil // Return nil to signal this component is disabled
     }
 
     // Default values
@@ -114,6 +120,29 @@ func (t *PostgresTranslator) Translate(node models.Node, ctx TranslationContext)
         Command:     command,
         Restart:     "always",
     }
+    
+    // Resource Limits for Docker Compose
+    if config.Resources != nil {
+        compose.Deploy = &DeployConfig{
+            Resources: &ResourcesBlock{
+                Limits: ResourceLimits{},
+            },
+        }
+        
+        hasLimit := false
+        if config.Resources.CPU > 0 {
+            compose.Deploy.Resources.Limits.CPUs = fmt.Sprintf("%.1f", config.Resources.CPU)
+            hasLimit = true
+        }
+        if config.Resources.Memory != "" && config.Resources.Memory != "0" {
+            compose.Deploy.Resources.Limits.Memory = config.Resources.Memory
+            hasLimit = true
+        }
+        
+        if !hasLimit {
+            compose.Deploy = nil
+        }
+    }
 
     // Helm Values (Bitnami structure)
     helm := make(HelmValues)
@@ -133,6 +162,33 @@ func (t *PostgresTranslator) Translate(node models.Node, ctx TranslationContext)
         },
     }
     
+    // Resource Limits for Helm
+    if config.Resources != nil {
+        resources := map[string]interface{}{}
+        limits := map[string]interface{}{}
+        requests := map[string]interface{}{}
+        
+        hasResource := false
+        if config.Resources.CPU > 0 {
+            limits["cpu"] = fmt.Sprintf("%.1f", config.Resources.CPU)
+            // For requests, we can set a percentage or same. Let's set 50% for requests.
+            requests["cpu"] = fmt.Sprintf("%.1fm", config.Resources.CPU * 500) // 1.0 -> 500m
+            hasResource = true
+        }
+        if config.Resources.Memory != "" && config.Resources.Memory != "0" {
+            limits["memory"] = config.Resources.Memory
+            requests["memory"] = config.Resources.Memory // Same for now to avoid OOMKill on burst
+            hasResource = true
+        }
+        
+        if hasResource {
+            resources["limits"] = limits
+            resources["requests"] = requests
+            helm["primary"].(map[string]interface{})["resources"] = resources
+        }
+    }
+    
+    // Additional configuration via 'primary.configuration' or 'postgresqlConfiguration'
     // Additional configuration via 'primary.configuration' or 'postgresqlConfiguration'
     // Additional configuration via 'primary.configuration' or 'postgresqlConfiguration'
     extraConfig := ""

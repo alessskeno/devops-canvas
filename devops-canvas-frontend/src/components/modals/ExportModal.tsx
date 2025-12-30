@@ -84,19 +84,29 @@ export function ExportModal({ isOpen, onClose }: ExportModalProps) {
     const getManifestContent = () => {
         if (!manifests) return '';
         if (manifestTab === 'docker') {
-            return yaml.dump(manifests.docker_compose);
+            return manifests.docker_compose ? yaml.dump(manifests.docker_compose) : '# No Docker Compose configuration generated for this context';
         }
         if (manifestTab === 'helm') {
-            return yaml.dump(manifests.helm_values, { lineWidth: -1 });
+            return manifests.helm_values ? yaml.dump(manifests.helm_values, { lineWidth: -1 }) : '# No Helm values generated';
         }
         if (manifestTab === 'chart') {
-            return yaml.dump(manifests.chart_yaml);
+            return manifests.chart_yaml ? yaml.dump(manifests.chart_yaml) : '# No Chart.yaml generated';
         }
         if (manifestTab === 'configs') {
-            return yaml.dump(manifests.configs);
+            return manifests.configs ? yaml.dump(manifests.configs) : '# No additional configs generated';
         }
         return '';
     };
+
+    // Auto-select first populated tab if current is empty
+    React.useEffect(() => {
+        if (manifests) {
+            if (manifests.docker_compose && manifestTab === 'docker') return;
+            if (!manifests.docker_compose && manifests.chart_yaml) {
+                setManifestTab('chart');
+            }
+        }
+    }, [manifests]);
 
     const handleCopy = () => {
         const content = mode === 'canvas' ? configContent : getManifestContent();

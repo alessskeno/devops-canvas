@@ -12,6 +12,7 @@ import (
 )
 
 type MonitoringStackConfig struct {
+    CommonConfig                 // Embed Enabled and Resources
 	// Prometheus
     EnablePrometheus             *bool  `json:"enable_prometheus"` // Default true if nil
 	PrometheusPort               any    `json:"prometheus_port"`
@@ -91,9 +92,32 @@ func (t *MonitoringStackTranslator) Translate(node models.Node, ctx TranslationC
     // Alertmanager Config Generation
     alertmanagerConfigContent := generateAlertmanagerConfig(config)
 
+    // Check Global Enabled
+    if config.Enabled != nil && !*config.Enabled {
+        return nil, nil
+    }
+
 	// --- 1. Docker Compose Generation ---
 	extras := make(map[string]ComposeService)
 	configs := make(map[string]string)
+    
+    // Prepare Deploy Config
+    var deployConfig *DeployConfig
+    if config.Resources != nil {
+        deployConfig = &DeployConfig{
+            Resources: &ResourcesBlock{Limits: ResourceLimits{}},
+        }
+        hasLimit := false
+        if config.Resources.CPU > 0 {
+            deployConfig.Resources.Limits.CPUs = fmt.Sprintf("%.1f", config.Resources.CPU)
+            hasLimit = true
+        }
+        if config.Resources.Memory != "" && config.Resources.Memory != "0" {
+            deployConfig.Resources.Limits.Memory = config.Resources.Memory
+            hasLimit = true
+        }
+        if !hasLimit { deployConfig = nil }
+    }
 
 	// Prometheus
     if enablePrometheus {
@@ -107,6 +131,10 @@ func (t *MonitoringStackTranslator) Translate(node models.Node, ctx TranslationC
 		    "scrape_configs": []interface{}{},
 	    }
 	    
+<<<<<<< HEAD
+=======
+        // ... (Keep existing scrape config logic) ...
+>>>>>>> ecd65c4 (Recovered from git corruption [skip ci])
         // Robust Scrape Config Parsing (Multi-Doc Support)
 	    if scrapeConfigContent != "" {
 		    // Use YAML Decoder to handle multiple documents
@@ -167,6 +195,10 @@ func (t *MonitoringStackTranslator) Translate(node models.Node, ctx TranslationC
 	    }
         
         // Handle Rules for Docker
+<<<<<<< HEAD
+=======
+        // ... (Keep existing rules logic) ...
+>>>>>>> ecd65c4 (Recovered from git corruption [skip ci])
         if rulesContent != "" {
              // Logic to extract valid Prometheus config if input is CRD
              var dockerRulesContent string
@@ -207,6 +239,10 @@ func (t *MonitoringStackTranslator) Translate(node models.Node, ctx TranslationC
 			    "--storage.tsdb.retention.time=" + config.PrometheusRetention,
 		    },
 		    Restart: "always",
+<<<<<<< HEAD
+=======
+            Deploy: deployConfig,
+>>>>>>> ecd65c4 (Recovered from git corruption [skip ci])
 	    }
         // Add rules mount if rules exist
         if rulesContent != "" {
@@ -230,6 +266,10 @@ func (t *MonitoringStackTranslator) Translate(node models.Node, ctx TranslationC
 		    },
 		    Command: []string{"--storage.path=/alertmanager", "--config.file=/etc/alertmanager/config.yml"},
 		    Restart: "always",
+<<<<<<< HEAD
+=======
+            Deploy: deployConfig,
+>>>>>>> ecd65c4 (Recovered from git corruption [skip ci])
 	    }
     }
 
@@ -245,10 +285,39 @@ func (t *MonitoringStackTranslator) Translate(node models.Node, ctx TranslationC
 		    },
 		    Volumes: []string{"grafana_data_" + node.ID + ":/var/lib/grafana"},
 		    Restart: "always",
+<<<<<<< HEAD
+=======
+            Deploy: deployConfig,
+>>>>>>> ecd65c4 (Recovered from git corruption [skip ci])
 	    }
     }
 
-	// --- 2. Helm Values (kube-prometheus-stack) ---
+    // 2. Prepare Helm Resources Block
+    var helmResources map[string]interface{}
+    if config.Resources != nil {
+        r := map[string]interface{}{}
+        l := map[string]interface{}{}
+        req := map[string]interface{}{}
+        
+        hasR := false
+        if config.Resources.CPU > 0 {
+            l["cpu"] = fmt.Sprintf("%.1f", config.Resources.CPU)
+            req["cpu"] = fmt.Sprintf("%.1fm", config.Resources.CPU * 500)
+            hasR = true
+        }
+        if config.Resources.Memory != "" && config.Resources.Memory != "0" {
+            l["memory"] = config.Resources.Memory
+            req["memory"] = config.Resources.Memory
+            hasR = true
+        }
+        if hasR {
+            r["limits"] = l
+            r["requests"] = req
+            helmResources = r
+        }
+    }
+
+	// --- 3. Helm Values (kube-prometheus-stack) ---
 	helm := make(HelmValues)
 
 	// Prometheus
@@ -263,7 +332,15 @@ func (t *MonitoringStackTranslator) Translate(node models.Node, ctx TranslationC
             "serviceMonitorSelector": map[string]interface{}{},
             "ruleSelector": map[string]interface{}{},
 	    }
+<<<<<<< HEAD
 	    
+=======
+        if helmResources != nil {
+            promSpec["resources"] = helmResources
+        }
+	    
+        // ... (Keep existing Scrape Config logic) ...
+>>>>>>> ecd65c4 (Recovered from git corruption [skip ci])
         // Scrape Config for Helm
 	    if scrapeConfigContent != "" {
             decoder := yaml.NewDecoder(strings.NewReader(scrapeConfigContent))
@@ -329,6 +406,7 @@ func (t *MonitoringStackTranslator) Translate(node models.Node, ctx TranslationC
 	// Alertmanager
     if enableAlertmanager {
 	    amConfig := map[string]interface{}{}
+<<<<<<< HEAD
 	    if err := yaml.Unmarshal([]byte(alertmanagerConfigContent), &amConfig); err == nil {
             helm["alertmanager"] = map[string]interface{}{
                 "enabled": true,
@@ -347,13 +425,35 @@ func (t *MonitoringStackTranslator) Translate(node models.Node, ctx TranslationC
         }
     } else {
         helm["alertmanager"] = map[string]interface{}{
+=======
+	    _ = yaml.Unmarshal([]byte(alertmanagerConfigContent), &amConfig) // Ignore error, empty map if fails
+        
+        amSpec := map[string]interface{}{
+            "retention": config.AlertmanagerRetention,
+        }
+        if helmResources != nil {
+            amSpec["resources"] = helmResources
+        }
+
+        helm["alertmanager"] = map[string]interface{}{
+            "enabled": true,
+            "config": amConfig,
+            "alertmanagerSpec": amSpec,
+        }
+    } else {
+        helm["alertmanager"] = map[string]interface{}{
+>>>>>>> ecd65c4 (Recovered from git corruption [skip ci])
             "enabled": false,
         }
     }
 
 	// Grafana
     if enableGrafana {
+<<<<<<< HEAD
 	    helm["grafana"] = map[string]interface{}{
+=======
+        grafanaMap := map[string]interface{}{
+>>>>>>> ecd65c4 (Recovered from git corruption [skip ci])
             "enabled": true,
 		    "adminUser":     config.GrafanaAdminUser,
 		    "adminPassword": config.GrafanaAdminPassword,
@@ -362,7 +462,15 @@ func (t *MonitoringStackTranslator) Translate(node models.Node, ctx TranslationC
 				    "allow_sign_up": config.GrafanaAllowSignUp,
 			    },
 		    },
+<<<<<<< HEAD
 	    }
+=======
+        }
+        if helmResources != nil {
+            grafanaMap["resources"] = helmResources
+        }
+	    helm["grafana"] = grafanaMap
+>>>>>>> ecd65c4 (Recovered from git corruption [skip ci])
     } else {
         helm["grafana"] = map[string]interface{}{
             "enabled": false,

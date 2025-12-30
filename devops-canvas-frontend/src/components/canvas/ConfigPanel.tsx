@@ -207,13 +207,15 @@ export function ConfigPanel() {
                             <div className="mb-4">
                                 <div className="flex justify-between mb-1.5">
                                     <label className="text-xs font-medium text-slate-700 dark:text-slate-300">CPU Limit</label>
-                                    <span className="text-xs text-slate-500">{selectedNode.data.resources?.cpu || 0.5} Cores</span>
+                                    <span className="text-xs text-slate-500">
+                                        {(selectedNode.data.resources?.cpu === 0 || selectedNode.data.resources?.cpu === undefined) ? 'Unlimited' : `${selectedNode.data.resources?.cpu} Cores`}
+                                    </span>
                                 </div>
                                 <input
                                     type="range"
-                                    min="0.1" max="4" step="0.1"
+                                    min="0" max="4" step="0.1"
                                     className={`w-full h-1 rounded-lg appearance-none cursor-pointer ${isLocked ? 'bg-slate-100 dark:bg-slate-800' : 'bg-slate-200 dark:bg-slate-700 accent-blue-500'}`}
-                                    value={selectedNode.data.resources?.cpu || 0.5}
+                                    value={selectedNode.data.resources?.cpu ?? 0}
                                     onChange={e => handleChange('resources', { ...selectedNode.data.resources, cpu: parseFloat(e.target.value) })}
                                     disabled={isLocked}
                                 />
@@ -222,15 +224,19 @@ export function ConfigPanel() {
                             <div>
                                 <div className="flex justify-between mb-1.5">
                                     <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Memory</label>
-                                    <span className="text-xs text-slate-500">{selectedNode.data.resources?.memory || '512Mi'}</span>
+                                    <span className="text-xs text-slate-500">
+                                        {(parseInt(String(selectedNode.data.resources?.memory || '0').replace(/[^0-9]/g, '')) === 0) ? 'Unlimited' : (selectedNode.data.resources?.memory || 'Unlimited')}
+                                    </span>
                                 </div>
                                 <input
                                     type="range"
-                                    min="128" max="4096" step="128"
+                                    min="0" max="4096" step="128"
                                     className={`w-full h-1 rounded-lg appearance-none cursor-pointer ${isLocked ? 'bg-slate-100 dark:bg-slate-800' : 'bg-slate-200 dark:bg-slate-700 accent-blue-500'}`}
-                                    // Simplification for the range input; keeping logic simple for prototype
-                                    value={parseInt(String(selectedNode.data.resources?.memory || '512').replace(/[^0-9]/g, '')) || 512}
-                                    onChange={e => handleChange('resources', { ...selectedNode.data.resources, memory: `${e.target.value}Mi` })}
+                                    value={parseInt(String(selectedNode.data.resources?.memory || '0').replace(/[^0-9]/g, '')) || 0}
+                                    onChange={e => {
+                                        const val = parseInt(e.target.value);
+                                        handleChange('resources', { ...selectedNode.data.resources, memory: val === 0 ? '0' : `${val}Mi` });
+                                    }}
                                     disabled={isLocked}
                                 />
                             </div>

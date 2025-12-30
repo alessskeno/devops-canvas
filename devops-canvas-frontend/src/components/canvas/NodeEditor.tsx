@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import yaml from 'js-yaml';
 import { ComponentLibrary } from './ComponentLibrary';
 import { CanvasArea } from './CanvasArea';
 import { ConfigPanel } from './ConfigPanel';
@@ -290,21 +291,83 @@ export function NodeEditor() {
         }
     };
 
+    const processImportData = async (data: any) => {
+        if (!data || !data.nodes) {
+            toast.error('Invalid configuration: Missing "nodes" array');
+            return;
+        }
+
+        // 1. Create ID Mapping (Old ID -> New UUID)
+        const idMap = new Map<string, string>();
+
+        // 2. Process Nodes: Regenerate IDs and Sanitize
+        const importedNodes = data.nodes.map((n: any) => {
+            const newId = crypto.randomUUID();
+            idMap.set(n.id, newId);
+
+            return {
+                ...n,
+                id: newId,
+                workspace_id: workspaceId || n.workspace_id,
+                selected: false,
+                position: n.position || { x: n.position_x || 0, y: n.position_y || 0 }
+            };
+        });
+
+        // 3. Process Connections: Remap Source/Target and Sanitize
+        const importedConnections = (data.connections || []).reduce((acc: any[], c: any) => {
+            const newSource = idMap.get(c.source);
+            const newTarget = idMap.get(c.target);
+
+            // Only keep connection if both endpoints exist in the imported set
+            if (newSource && newTarget) {
+                acc.push({
+                    ...c,
+                    id: crypto.randomUUID(),
+                    workspace_id: workspaceId || c.workspace_id,
+                    source: newSource,
+                    target: newTarget
+                });
+            }
+            return acc;
+        }, []);
+
+        // 4. Load & Save
+        loadCanvas(importedNodes, importedConnections);
+        setShowImportModal(false);
+
+        if (workspaceId) {
+            try {
+                await saveCanvas(workspaceId);
+                toast.success('Configuration imported and saved as new copy');
+            } catch (saveError) {
+                console.error('Import save failed:', saveError);
+                toast.error('Imported locally but failed to save to backend');
+            }
+        } else {
+            toast.success('Configuration imported (unsaved)');
+        }
+    };
+
     const handleFile = (file: File) => {
         const reader = new FileReader();
-        reader.onload = (e) => {
+        reader.onload = async (e) => {
             try {
                 const content = e.target?.result as string;
-                const data = JSON.parse(content);
-                if (data.nodes) {
-                    loadCanvas(data.nodes, data.connections || []);
-                    setShowImportModal(false);
-                    toast.success('Configuration imported');
-                } else {
-                    toast.error('Invalid configuration');
+                let data: any;
+                try {
+                    data = JSON.parse(content);
+                } catch (jsonErr) {
+                    try {
+                        data = yaml.load(content);
+                    } catch (yamlErr) {
+                        throw new Error('Invalid format: Must be JSON or YAML');
+                    }
                 }
+                await processImportData(data);
             } catch (err) {
-                toast.error('Invalid JSON file');
+                toast.error('Failed to parse file');
+                console.error(err);
             }
         };
         reader.readAsText(file);
@@ -658,20 +721,24 @@ export function NodeEditor() {
 
                         <div className="p-4 border-t border-gray-100 dark:border-slate-800 flex justify-end gap-2">
                             <Button variant="secondary" onClick={() => setShowImportModal(false)}>Cancel</Button>
-                            <Button onClick={() => {
+                            <Button onClick={async () => {
                                 const textarea = document.getElementById('import-textarea') as HTMLTextAreaElement;
                                 if (textarea.value) {
                                     try {
-                                        const data = JSON.parse(textarea.value);
-                                        if (data.nodes) {
-                                            // recordHistory(); // Mocked
-                                            loadCanvas(data.nodes, data.connections || []);
-                                            setShowImportModal(false);
-                                        } else {
-                                            toast.error("Invalid configuration: Missing 'nodes' array.");
+                                        let data: any;
+                                        const content = textarea.value;
+                                        try {
+                                            data = JSON.parse(content);
+                                        } catch (jsonErr) {
+                                            try {
+                                                data = yaml.load(content);
+                                            } catch (yamlErr) {
+                                                throw new Error('Invalid format');
+                                            }
                                         }
+                                        await processImportData(data);
                                     } catch (e) {
-                                        toast.error("Invalid JSON format.");
+                                        toast.error("Invalid JSON or YAML format.");
                                     }
                                 }
                             }}>
