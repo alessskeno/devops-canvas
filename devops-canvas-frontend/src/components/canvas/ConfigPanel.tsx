@@ -216,7 +216,7 @@ export function ConfigPanel() {
                                     min="0" max="4" step="0.1"
                                     className={`w-full h-1 rounded-lg appearance-none cursor-pointer ${isLocked ? 'bg-slate-100 dark:bg-slate-800' : 'bg-slate-200 dark:bg-slate-700 accent-blue-500'}`}
                                     value={selectedNode.data.resources?.cpu ?? 0}
-                                    onChange={e => handleChange('resources', { ...selectedNode.data.resources, cpu: parseFloat(e.target.value) })}
+                                    onChange={e => handleChange('resources', { ...(selectedNode.data.resources || {}), cpu: parseFloat(e.target.value) })}
                                     disabled={isLocked}
                                 />
                             </div>
@@ -235,7 +235,7 @@ export function ConfigPanel() {
                                     value={parseInt(String(selectedNode.data.resources?.memory || '0').replace(/[^0-9]/g, '')) || 0}
                                     onChange={e => {
                                         const val = parseInt(e.target.value);
-                                        handleChange('resources', { ...selectedNode.data.resources, memory: val === 0 ? '0' : `${val}Mi` });
+                                        handleChange('resources', { ...(selectedNode.data.resources || {}), memory: val === 0 ? '0' : `${val}Mi` });
                                     }}
                                     disabled={isLocked}
                                 />

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/docker/docker/client"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
@@ -13,6 +14,7 @@ import (
 	"devops-canvas-backend/internal/auth"
 	"devops-canvas-backend/internal/db"
 	"devops-canvas-backend/internal/deploy"
+    "devops-canvas-backend/internal/realtime"
 	"devops-canvas-backend/internal/team"
 	"devops-canvas-backend/internal/workspace"
 )
@@ -32,6 +34,27 @@ func main() {
 	authRepo := auth.NewRepository()
 	authSvc := auth.NewService(authRepo)
 	authHandler := auth.NewHandler(authSvc)
+
+    // --- Realtime / WebSocket Init ---
+    redisAddr := os.Getenv("REDIS_ADDR")
+    if redisAddr == "" {
+        redisAddr = "localhost:6379"
+    }
+    
+    // 1. Redis Adapter
+    redisAdapter := realtime.NewRedisAdapter(redisAddr)
+    
+    // 2. Hub
+    hub := realtime.NewHub(redisAdapter)
+    go hub.Run()
+    
+    // 3. System Monitor
+    monitor := realtime.NewMonitor(hub)
+    monitor.Start()
+
+    // 4. Docker Monitor (Workspace Resources)
+    dockerMonitor := deploy.NewDockerMonitor(hub)
+    dockerMonitor.Start()
 
 	port := os.Getenv("PORT")
 
@@ -58,6 +81,11 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"status":"ok"}`))
 	})
+    
+    // WebSocket Route
+    r.Get("/api/ws", func(w http.ResponseWriter, r *http.Request) {
+        realtime.HandleWs(hub, w, r)
+    })
 
 	r.Route("/api", func(r chi.Router) {
 		// API routes will be mounted here
@@ -78,7 +106,16 @@ func main() {
 		// Deploy Module
 		deployRepo := deploy.NewRepository()
         manifestGenerator := deploy.NewManifestGenerator()
-		deploySvc := deploy.NewService(deployRepo, workspaceRepo, manifestGenerator)
+        
+        // Init Docker Client
+        dockerClient, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+        if err != nil {
+            log.Printf("Failed to create Docker Client: %v", err)
+            // Continue but logs might fail
+            dockerClient = nil
+        }
+        
+		deploySvc := deploy.NewService(deployRepo, workspaceRepo, manifestGenerator, hub, dockerClient) // Injected Hub and Docker Client
 		deployHandler := deploy.NewHandler(deploySvc, authSvc)
 		deployHandler.RegisterRoutes(r)
 

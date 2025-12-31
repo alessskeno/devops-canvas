@@ -16,6 +16,15 @@ import { useWorkspaceStore } from '../../store/workspaceStore';
 import toast from 'react-hot-toast';
 import { useDarkMode } from '../../hooks/useDarkMode';
 import { ExportModal } from '../modals/ExportModal';
+import { useRealtime } from '../../hooks/useRealtime';
+import { StatusBar } from '../layout/StatusBar';
+import { DeploymentProgress } from '../modals/DeploymentProgress';
+
+interface DeploymentStep {
+    label: string;
+    status: 'pending' | 'in-progress' | 'completed' | 'error';
+    details?: string;
+}
 
 
 
@@ -30,6 +39,8 @@ export function NodeEditor() {
         selectedNodeId, duplicateNode, removeNode
     } = useCanvasStore();
 
+    const { isConnected, systemStats, workspaceStats, lastMessage } = useRealtime(workspaceId);
+
     const { fetchWorkspace, currentWorkspace } = useWorkspaceStore();
 
     const [sidebarVisible, setSidebarVisible] = useState(() => localStorage.getItem('canvas_sidebar') !== 'false');
@@ -37,9 +48,57 @@ export function NodeEditor() {
 
     // Modal State
     const [showDeployModal, setShowDeployModal] = useState(false);
-    const [deployStep, setDeployStep] = useState(0);
+    const [deployStep, setDeployStep] = useState(0); // Deprecated by deploymentSteps
+    const [deploymentSteps, setDeploymentSteps] = useState<DeploymentStep[]>([
+        { label: 'Initializing Deployment', status: 'pending', details: '' },
+        { label: 'Generating Manifests', status: 'pending', details: '' },
+        { label: 'Provisioning Containers', status: 'pending', details: '' },
+        { label: 'Verifying Health', status: 'pending', details: '' }
+    ]);
     const [showExportModal, setShowExportModal] = useState(false);
     const [showUnsavedModal, setShowUnsavedModal] = useState(false);
+
+    // Deployment Progress Handler
+    useEffect(() => {
+        if (!lastMessage || lastMessage.type !== 'deployment.step' || !showDeployModal) return;
+
+        const payload = lastMessage.payload;
+        // payload: { step: string, status: string, label: string }
+        // We map backend steps to our UI steps
+
+        setDeploymentSteps(prev => {
+            const newSteps = [...prev];
+            // Mapping logic:
+            // initializing -> 0
+            // generating -> 1
+            // provisioning -> 2
+            // verified -> 3
+
+            let idx = -1;
+            switch (payload.step) {
+                case 'initializing': idx = 0; break;
+                case 'generating': idx = 1; break;
+                case 'provisioning': idx = 2; break;
+                case 'verified': idx = 3; break;
+            }
+
+            if (idx !== -1) {
+                newSteps[idx] = {
+                    label: payload.label || newSteps[idx].label,
+                    status: payload.status as any,
+                    details: payload.details || ''
+                };
+
+                // Auto-complete previous steps
+                if (payload.status === 'in-progress') {
+                    for (let i = 0; i < idx; i++) {
+                        if (newSteps[i].status !== 'completed') newSteps[i].status = 'completed';
+                    }
+                }
+            }
+            return newSteps;
+        });
+    }, [lastMessage, showDeployModal]);
     const [showImportModal, setShowImportModal] = useState(false);
     const [dragActive, setDragActive] = useState(false);
     const importInputRef = React.useRef<HTMLInputElement>(null);
@@ -249,16 +308,123 @@ export function NodeEditor() {
         saveWorkspace();
     };
 
-    const handleDeploy = () => {
+    // Deploy Logic
+    const [deployLogs, setDeployLogs] = useState<string[]>([]);
+    const abortControllerRef = React.useRef<AbortController | null>(null);
+
+    const handleDeploy = async () => {
+        if (!workspaceId) return;
+
         setShowDeployModal(true);
         setDeployStep(0);
-        let step = 0;
-        const interval = setInterval(() => {
-            step++;
-            setDeployStep(step);
-            if (step >= 4) clearInterval(interval);
-        }, 1500);
+        setDeploymentSteps([
+            { label: 'Initializing Deployment', status: 'in-progress', details: '' },
+            { label: 'Generating Manifests', status: 'pending', details: '' },
+            { label: 'Provisioning Containers', status: 'pending', details: '' },
+            { label: 'Verifying Health', status: 'pending', details: '' }
+        ]);
+        setDeployLogs(['Starting deployment...']);
+
+        // Create new controller
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
+
+        let interval: any = null;
+
+        try {
+            const { default: api } = await import('../../utils/api');
+
+            // Start polling for logs
+            interval = setInterval(async () => {
+                if (controller.signal.aborted) {
+                    if (interval) clearInterval(interval);
+                    return;
+                }
+                try {
+                    // Only fetch if modal is open? Yes.
+                    const logRes = await api.get(`/deploy/${workspaceId}/logs`);
+                    if (logRes.data.logs) {
+                        setDeployLogs(logRes.data.logs);
+                    }
+                } catch (e) {
+                    // ignore poll errors (e.g. 404 before pods created)
+                }
+            }, 1000);
+
+            // Pass signal to axios/fetch - verify deployment
+            await api.post(`/deploy/${workspaceId}`, {}, {
+                signal: controller.signal
+            });
+
+            // Deployment Success
+            if (interval) clearInterval(interval);
+
+            // Note: We don't auto-close the modal, allowing user to see "Verified" state.
+            // But we stop polling logs to reduce network noise.
+
+        } catch (error: any) {
+            if (interval) clearInterval(interval);
+
+            if (error.name === 'CanceledError' || error.code === "ERR_CANCELED") {
+                toast.error("Deployment Cancelled");
+                setDeployLogs(prev => [...prev, "Deployment cancelled by user."]);
+            } else {
+                console.error(error);
+                // The deployment step error state is handled by WebSocket events, 
+                // but we might want to log it here too.
+                toast.error("Deployment Failed");
+            }
+        }
     };
+
+    const handleCancelDeploy = async () => {
+        // 1. Abort ongoing request
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+            abortControllerRef.current = null;
+        }
+
+        // 2. Trigger explicit teardown
+        toast.loading("Cancelling deployment...", { id: "cancel-deploy" });
+
+        try {
+            const { default: api } = await import('../../utils/api');
+            await api.post(`/deploy/${workspaceId}/teardown`);
+            toast.success("Deployment Cancelled & Cleaned up", { id: "cancel-deploy" });
+
+            // Visual Rollback Animation
+            setDeploymentSteps(prev => {
+                const newSteps = [...prev];
+                // Mark current error step as pending immediately to clear red state
+                const errorIdx = newSteps.findIndex(s => s.status === 'error');
+                if (errorIdx !== -1) {
+                    newSteps[errorIdx] = { ...newSteps[errorIdx], status: 'pending', details: '' };
+                }
+                return newSteps;
+            });
+
+            // Animate backwards
+            for (let i = deploymentSteps.length - 1; i >= 0; i--) {
+                if (deploymentSteps[i].status === 'completed' || deploymentSteps[i].status === 'in-progress' || deploymentSteps[i].status === 'error') {
+                    await new Promise(resolve => setTimeout(resolve, 300)); // Delay
+                    setDeploymentSteps(prev => {
+                        const newSteps = [...prev];
+                        newSteps[i] = { ...newSteps[i], status: 'pending', details: '' };
+                        return newSteps;
+                    });
+                }
+            }
+
+            // Close after animation
+            setTimeout(() => setShowDeployModal(false), 500);
+
+        } catch (e) {
+            console.error("Teardown failed", e);
+            toast.error("Cleanup failed", { id: "cancel-deploy" });
+        }
+    };
+
+    // ...
 
     const confirmExit = () => {
         setHasUnsavedChanges(false);
@@ -524,117 +690,16 @@ export function NodeEditor() {
             </div>
 
             {/* Status Bar */}
-            <div className="h-8 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between px-4 text-xs text-slate-500 z-20">
-                <div className="flex items-center space-x-4">
-                    <div className="flex items-center text-green-600"><div className="w-2 h-2 bg-green-500 rounded-full mr-1.5"></div>System Healthy</div>
-                    <div>CPU: 2.5/8 cores</div>
-                    <div>Mem: 3.2/16 GB</div>
-                </div>
-                <div className="flex items-center space-x-4">
-                    <span>You • Live</span>
-                    <span>{nodes.length} Components</span>
-                    <span>{connections.length} Connections</span>
-                </div>
-            </div>
+            <StatusBar isConnected={isConnected} workspaceStats={workspaceStats} />
 
             {/* 6. Deploy Modal Overlay */}
-            {showDeployModal && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    {/* ... modal content ... */}
-                    <div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 border border-gray-200 dark:border-slate-800">
-                        <div className="bg-gray-50 dark:bg-slate-800 px-6 py-4 border-b border-gray-200 dark:border-slate-700 flex justify-between items-center">
-                            <h3 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                                {deployStep === 4 ? <Check className="text-green-500" /> : <Loader2 className="animate-spin text-blue-500" />}
-                                {deployStep === 4 ? "Deployment Successful" : "Deploying Infrastructure"}
-                            </h3>
-                            {deployStep === 4 && <button onClick={() => setShowDeployModal(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"><X size={20} /></button>}
-                        </div>
-                        <div className="p-0">
-                            {/* Progress Bar */}
-                            <div className="h-1 bg-gray-100 dark:bg-slate-800 w-full">
-                                <div
-                                    className="h-full bg-blue-500 transition-all duration-500 ease-out"
-                                    style={{ width: `${deployStep * 25}%` }}
-                                />
-                            </div>
-
-                            <div className="flex h-96">
-                                {/* Steps List */}
-                                <div className="w-1/2 p-6 border-r border-gray-200 dark:border-slate-700 space-y-4">
-                                    {[
-                                        "Validating Configuration",
-                                        "Provisioning Kind Cluster",
-                                        "Starting Database Services",
-                                        "Configuring Network Mesh"
-                                    ].map((step, idx) => (
-                                        <div key={idx} className="flex items-center gap-3">
-                                            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs border ${deployStep > idx
-                                                ? 'bg-green-100 dark:bg-green-900/30 border-green-200 dark:border-green-800 text-green-700 dark:text-green-400'
-                                                : deployStep === idx
-                                                    ? 'bg-blue-100 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400 animate-pulse'
-                                                    : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-300 dark:text-slate-600'
-                                                }`}>
-                                                {deployStep > idx ? <Check size={14} /> : idx + 1}
-                                            </div>
-                                            <span className={`text-sm ${deployStep === idx ? 'font-medium text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400'}`}>{step}</span>
-                                        </div>
-                                    ))}
-
-                                    {deployStep === 4 && (
-                                        <div className="mt-6 bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-900/30 rounded-lg p-4">
-                                            <p className="text-sm text-green-800 dark:text-green-400 font-medium mb-1">Workspace is live!</p>
-                                            <p className="text-xs text-green-600 dark:text-green-500 mb-3">All services are healthy and reachable.</p>
-                                            <div className="flex gap-2">
-                                                <button onClick={() => setShowDeployModal(false)} className="px-3 py-1.5 bg-green-600 text-white text-xs rounded hover:bg-green-700">View Workspace</button>
-                                                <button className="px-3 py-1.5 bg-white dark:bg-slate-800 border border-green-200 dark:border-green-900 text-green-700 dark:text-green-400 text-xs rounded hover:bg-green-50 dark:hover:bg-slate-700">Open Dashboard</button>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Terminal Logs */}
-                                <div className="w-1/2 bg-gray-900 dark:bg-black p-4 font-mono text-xs overflow-y-auto">
-                                    <div className="text-gray-500 mb-2 border-b border-gray-800 pb-2 flex justify-between">
-                                        <span>Output Logs</span>
-                                        <span className="text-gray-600">tail -f</span>
-                                    </div>
-                                    <div className="space-y-1 text-gray-300">
-                                        {deployStep >= 0 && <div className="text-blue-400">→ Initializing deployment pipeline...</div>}
-                                        {deployStep >= 1 && (
-                                            <>
-                                                <div>[valid] schema_check_pass: true</div>
-                                                <div>[valid] resource_quota_check: ok</div>
-                                            </>
-                                        )}
-                                        {deployStep >= 2 && (
-                                            <>
-                                                <div>[kind] creating cluster "dev-cluster-1"...</div>
-                                                <div>[kind] node/1 joined (10.244.0.1)</div>
-                                                <div className="text-yellow-400">[warn] image pull delay for postgres:15.4</div>
-                                            </>
-                                        )}
-                                        {deployStep >= 3 && (
-                                            <>
-                                                <div>[db] postgres:5432 listening</div>
-                                                <div>[redis] redis:6379 listening</div>
-                                                <div>[kafka] broker-0 online</div>
-                                            </>
-                                        )}
-                                        {deployStep >= 4 && (
-                                            <>
-                                                <div className="text-green-400">✔ Deployment finalized in 4.2s</div>
-                                                <div>----------------------------------------</div>
-                                                <div>Access URL: https://dev-canvas.local/app</div>
-                                            </>
-                                        )}
-                                        <div className="animate-pulse">_</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
+            <DeploymentProgress
+                isOpen={showDeployModal}
+                onClose={() => setShowDeployModal(false)}
+                onCancel={handleCancelDeploy}
+                logs={deployLogs}
+                steps={deploymentSteps}
+            />
 
             {/* 7. Export Modal */}
             <ExportModal isOpen={showExportModal} onClose={() => setShowExportModal(false)} />
@@ -748,6 +813,8 @@ export function NodeEditor() {
                     </div>
                 </div>
             )}
+
+
         </div>
     );
 }

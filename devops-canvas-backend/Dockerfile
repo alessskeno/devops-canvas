@@ -15,6 +15,9 @@ RUN go mod download
 # Copy the source code
 COPY . .
 
+# Ensure deps are tidy (fixes missing sum entries for transitive deps)
+RUN go mod tidy
+
 # Build the application
 RUN CGO_ENABLED=0 GOOS=linux go build -o main ./cmd/api
 
@@ -24,7 +27,17 @@ FROM alpine:3.18
 WORKDIR /app
 
 # Install runtime dependencies
-RUN apk add --no-cache ca-certificates tzdata helm
+RUN apk add --no-cache ca-certificates tzdata helm docker-cli docker-cli-compose curl
+
+# Install Kubectl
+RUN curl -LO https://dl.k8s.io/release/v1.28.2/bin/linux/amd64/kubectl && \
+    chmod +x ./kubectl && \
+    mv ./kubectl /usr/local/bin/kubectl
+
+# Install Kind
+RUN curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64 && \
+    chmod +x ./kind && \
+    mv ./kind /usr/local/bin/kind
 
 # Copy the binary from the builder stage
 COPY --from=builder /app/main .

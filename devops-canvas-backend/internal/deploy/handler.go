@@ -20,6 +20,7 @@ func NewHandler(svc *Service, authSvc *auth.Service) *Handler {
 func (h *Handler) RegisterRoutes(r chi.Router) {
     r.Route("/deploy", func(r chi.Router) {
         r.Post("/{workspaceID}", h.DeployWorkspace)
+        r.Post("/{workspaceID}/teardown", h.TeardownWorkspace)
         r.Post("/{workspaceID}/manifests", h.GenerateManifests)
         r.Get("/{deployID}/logs", h.GetLogs)
     })
@@ -44,11 +45,39 @@ func (h *Handler) DeployWorkspace(w http.ResponseWriter, r *http.Request) {
     }
 
     workspaceID := chi.URLParam(r, "workspaceID")
-    deployID, _ := h.svc.DeployWorkspace(r.Context(), workspaceID)
+    status, err := h.svc.DeployWorkspace(r.Context(), workspaceID)
+    if err != nil {
+        h.respondError(w, http.StatusInternalServerError, "Deployment failed: "+err.Error())
+        return
+    }
     
     json.NewEncoder(w).Encode(map[string]string{
-        "message": "Deployment started (stub)",
-        "deployID": deployID,
+        "message": "Deployment successful",
+        "status": status,
+        "deployID": workspaceID, // For now, deployID IS workspaceID
+    })
+}
+
+func (h *Handler) TeardownWorkspace(w http.ResponseWriter, r *http.Request) {
+    userID, err := h.getUserId(r)
+    if err != nil {
+        h.respondError(w, http.StatusUnauthorized, "Unauthorized")
+        return
+    }
+
+    if err := h.authSvc.CheckRole(r.Context(), userID, "Owner", "Admin", "Editor"); err != nil {
+        h.respondError(w, http.StatusForbidden, "Insufficient permissions")
+        return
+    }
+
+    workspaceID := chi.URLParam(r, "workspaceID")
+    if err := h.svc.TeardownWorkspace(r.Context(), workspaceID); err != nil {
+        h.respondError(w, http.StatusInternalServerError, "Teardown failed: "+err.Error())
+        return
+    }
+    
+    json.NewEncoder(w).Encode(map[string]string{
+        "message": "Teardown initiated",
     })
 }
 
@@ -59,8 +88,13 @@ func (h *Handler) GetLogs(w http.ResponseWriter, r *http.Request) {
         return
     }
     
-    deployID := chi.URLParam(r, "deployID")
-    logs, _ := h.svc.GetLogs(r.Context(), deployID)
+    // In our MVP, deployID is the workspaceID because we overwrite the deployment in /tmp/workspaces/{id}
+    workspaceID := chi.URLParam(r, "deployID")
+    logs, err := h.svc.GetLogs(r.Context(), workspaceID)
+    if err != nil {
+        h.respondError(w, http.StatusInternalServerError, err.Error())
+        return
+    }
     
     json.NewEncoder(w).Encode(map[string]interface{}{
         "logs": logs,

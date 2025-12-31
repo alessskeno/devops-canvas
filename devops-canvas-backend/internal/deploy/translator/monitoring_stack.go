@@ -113,7 +113,7 @@ func (t *MonitoringStackTranslator) Translate(node models.Node, ctx TranslationC
             hasLimit = true
         }
         if config.Resources.Memory != "" && config.Resources.Memory != "0" {
-            deployConfig.Resources.Limits.Memory = config.Resources.Memory
+            deployConfig.Resources.Limits.Memory = SanitizeMemoryForCompose(config.Resources.Memory)
             hasLimit = true
         }
         if !hasLimit { deployConfig = nil }

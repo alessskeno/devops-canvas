@@ -24,6 +24,8 @@ func GetTranslator(componentType string) (ComponentTranslator, error) {
         return &ValkeyTranslator{}, nil
     case "monitoring_stack":
         return &MonitoringStackTranslator{}, nil
+    case "kind-cluster":
+        return &KindTranslator{}, nil
 	default:
 		return nil, fmt.Errorf("unsupported component type: %s", componentType)
 	}

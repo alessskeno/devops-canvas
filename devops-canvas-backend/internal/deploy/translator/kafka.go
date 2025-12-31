@@ -60,7 +60,7 @@ func (t *KafkaTranslator) Translate(node models.Node, ctx TranslationContext) (*
     }
 
     compose := &ComposeService{
-        Image:       "bitnami/kafka:" + version,
+        Image:       "bitnami/kafka:" + SanitizeDockerVersion(version),
         Ports:       []string{"9092:9092"}, // Standard port
         Environment: env,
         Volumes:     []string{"kafka_data_" + node.ID + ":/bitnami/kafka"},
@@ -78,7 +78,7 @@ func (t *KafkaTranslator) Translate(node models.Node, ctx TranslationContext) (*
             hasLimit = true
         }
         if config.Resources.Memory != "" && config.Resources.Memory != "0" {
-            compose.Deploy.Resources.Limits.Memory = config.Resources.Memory
+            compose.Deploy.Resources.Limits.Memory = SanitizeMemoryForCompose(config.Resources.Memory)
             hasLimit = true
         }
         if !hasLimit { compose.Deploy = nil }

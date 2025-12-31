@@ -3,6 +3,8 @@ package translator
 import (
     "encoding/json"
     "fmt"
+    
+    "github.com/Masterminds/semver/v3"
     "devops-canvas-backend/internal/models"
 )
 
@@ -38,7 +40,7 @@ func (t *PostgresTranslator) Translate(node models.Node, ctx TranslationContext)
     // Default values
     version := config.Version
     if version == "" {
-        version = "15"
+        version = "16"
     }
     
     port := fmt.Sprintf("%v", config.Port)
@@ -76,21 +78,34 @@ func (t *PostgresTranslator) Translate(node models.Node, ctx TranslationContext)
         command = append(command, "-c", "max_wal_size="+config.MaxWalSize)
     }
     
+
     // File Generation
     generatedConfigs := make(map[string]string)
-    volumes := []string{"postgres_data_" + node.ID + ":/var/lib/postgresql/data"}
+    
+    // Determine Volume Mount Path and Name based on Version
+    // Postgres 18+ requires mount at /var/lib/postgresql
+    // It also enforces strict directory structure, so we use a fresh volume for 18+ to avoid conflicts with older data.
+    mountPath := "/var/lib/postgresql/data"
+    volumeName := "postgres_data_" + node.ID
+    
+    // Parse version to check if >= 18
+    if v, err := semver.NewVersion(version); err == nil {
+         if v.Major() >= 18 {
+             mountPath = "/var/lib/postgresql"
+             // Version the volume to ensure clean start for major upgrade
+             volumeName = fmt.Sprintf("postgres_data_v%d_%s", v.Major(), node.ID)
+         }
+    } else {
+        // Fallback string check
+        if len(version) >= 2 && version[:2] == "18" {
+             mountPath = "/var/lib/postgresql"
+             volumeName = "postgres_data_v18_" + node.ID
+        }
+    }
+    
+    volumes := []string{volumeName + ":" + mountPath}
     
     // Handle pg_hba.conf
-    // The schema says `pg_hba` is the key for the node-select
-    // We need to parse this locally; struct definition didn't have it before, adding it via map check or updating struct
-    // Let's rely on Unmarshal into a map for dynamic fields or update struct above.
-    // I will use a map to extract the node ID string first because the struct field might depend on how it was saved.
-    // Actually, I'll just check if I can add it to the struct.
-    // Wait, I can't easily modify the struct inside this Replace block if I don't see the top. 
-    // I will assume explicit map parsing for safety or re-declare struct in this block if possible.
-    // Re-declaring struct here works if I replace the whole function.
-    
-    // Look for pg_hba in raw data map to be safe
     var rawData map[string]interface{}
     _ = json.Unmarshal(node.Data, &rawData)
     
@@ -99,21 +114,16 @@ func (t *PostgresTranslator) Translate(node models.Node, ctx TranslationContext)
          if err == nil {
              var fileConfig ConfigFile
              if err := json.Unmarshal(fileNode.Data, &fileConfig); err == nil {
-                 // Use consistent naming for volume mount
                  fileName := fmt.Sprintf("pg_hba_%s.conf", node.ID)
                  generatedConfigs[fileName] = fileConfig.Content
-                 // Mount it
                  volumes = append(volumes, fmt.Sprintf("./configs/%s:/etc/postgresql/pg_hba.conf", fileName))
-                 // Postgres requires explicit config file enabling if hba is swapped sometimes, but usually just overwriting /var/lib/postgresql/data/pg_hba.conf works if volume is data.
-                 // However, official image uses /var/lib/postgresql/data. Mounting single file into volume dir is tricky.
-                 // Better to mount to /etc/postgresql/pg_hba.conf and use -c hba_file=...
                  command = append(command, "-c", "hba_file=/etc/postgresql/pg_hba.conf")
              }
          }
     }
 
     compose := &ComposeService{
-        Image:       "postgres:" + version,
+        Image:       "postgres:" + SanitizeDockerVersion(version),
         Ports:       []string{port + ":5432"},
         Environment: env,
         Volumes:     volumes,
@@ -135,7 +145,7 @@ func (t *PostgresTranslator) Translate(node models.Node, ctx TranslationContext)
             hasLimit = true
         }
         if config.Resources.Memory != "" && config.Resources.Memory != "0" {
-            compose.Deploy.Resources.Limits.Memory = config.Resources.Memory
+            compose.Deploy.Resources.Limits.Memory = SanitizeMemoryForCompose(config.Resources.Memory)
             hasLimit = true
         }
         

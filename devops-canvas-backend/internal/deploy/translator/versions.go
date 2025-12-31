@@ -434,3 +434,15 @@ func fetchKindVersionsFromGitHub() ([]VersionOption, error) {
     
     return options, nil
 }
+
+// SanitizeDockerVersion strips the patch version from a SemVer string to match standard Docker Image tagging conventions (X.Y).
+// e.g. "16.1.0" -> "16.1", "7.4.3" -> "7.4"
+// If the version is not valid SemVer, it returns it as is.
+func SanitizeDockerVersion(version string) string {
+    v, err := semver.NewVersion(version)
+    if err != nil {
+        return version
+    }
+    // Return Major.Minor
+    return fmt.Sprintf("%d.%d", v.Major(), v.Minor())
+}

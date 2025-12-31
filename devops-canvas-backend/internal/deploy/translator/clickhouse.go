@@ -50,7 +50,7 @@ func (t *ClickHouseTranslator) Translate(node models.Node, ctx TranslationContex
     // Official image 'clickhouse/clickhouse-server' supports config via /etc/clickhouse-server/config.d/
     
     compose := &ComposeService{
-        Image:       "clickhouse/clickhouse-server:" + version,
+        Image:       "clickhouse/clickhouse-server:" + SanitizeDockerVersion(version),
         Ports:       []string{httpPort + ":8123", tcpPort + ":9000"},
         Environment: map[string]string{
             "CLICKHOUSE_DB": "default",
@@ -70,7 +70,7 @@ func (t *ClickHouseTranslator) Translate(node models.Node, ctx TranslationContex
             hasLimit = true
         }
         if config.Resources.Memory != "" && config.Resources.Memory != "0" {
-            compose.Deploy.Resources.Limits.Memory = config.Resources.Memory
+            compose.Deploy.Resources.Limits.Memory = SanitizeMemoryForCompose(config.Resources.Memory)
             hasLimit = true
         }
         if !hasLimit { compose.Deploy = nil }

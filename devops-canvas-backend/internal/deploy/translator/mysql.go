@@ -68,7 +68,7 @@ func (t *MySQLTranslator) Translate(node models.Node, ctx TranslationContext) (*
     }
 
     compose := &ComposeService{
-        Image:       "mysql:" + version,
+        Image:       "mysql:" + SanitizeDockerVersion(version),
         Ports:       []string{port + ":3306"},
         Environment: env,
         Volumes:     []string{"mysql_data_" + node.ID + ":/var/lib/mysql"},
@@ -87,7 +87,7 @@ func (t *MySQLTranslator) Translate(node models.Node, ctx TranslationContext) (*
             hasLimit = true
         }
         if config.Resources.Memory != "" && config.Resources.Memory != "0" {
-            compose.Deploy.Resources.Limits.Memory = config.Resources.Memory
+            compose.Deploy.Resources.Limits.Memory = SanitizeMemoryForCompose(config.Resources.Memory)
             hasLimit = true
         }
         if !hasLimit { compose.Deploy = nil }
