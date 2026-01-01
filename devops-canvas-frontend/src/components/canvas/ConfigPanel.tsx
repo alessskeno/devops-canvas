@@ -342,12 +342,7 @@ export function ConfigPanel() {
                 )}
             </div>
 
-            {/* Footer Buttons */}
-            <div className="p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800">
-                <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white" onClick={() => selectNode(null)} disabled={isLocked}>
-                    {isLocked ? 'Locked (Read Only)' : 'Save Changes'}
-                </Button>
-            </div>
+
         </div>
     );
 }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import yaml from 'js-yaml';
 import { ComponentLibrary } from './ComponentLibrary';
 import { CanvasArea } from './CanvasArea';
@@ -151,6 +151,41 @@ export function NodeEditor() {
        We will replace lines 321-327 with dynamic content.
     */
 
+
+    // Calculate Running Nodes based on Realtime Stats
+    const runningNodeIds = useMemo(() => {
+        const running = new Set<string>();
+        if (!workspaceStats?.containers || workspaceStats.containers.length === 0) return running;
+
+        const hasRunningContainers = workspaceStats.containers.length > 0;
+
+        nodes.forEach(node => {
+            // Infrastructure Nodes are "Running" if the workspace is active (has containers)
+            if (node.type === 'docker-compose' || node.type === 'kind-cluster') {
+                if (hasRunningContainers) {
+                    running.add(node.id);
+                }
+                return;
+            }
+
+            // Standard Components: Check for matching container
+            const shortID = node.id.slice(0, 4);
+            const expectedServiceFragment = `${node.type}-${shortID}`;
+
+            // Check if any container matches this fragment
+            // We look for strict inclusion of "type-shortID" in the container name
+            const isRunning = workspaceStats.containers.some(c => {
+                // c.Name is typically "/project_service_1" or "project-service-1"
+                return c.Name.includes(expectedServiceFragment);
+            });
+
+            if (isRunning) {
+                running.add(node.id);
+            }
+        });
+
+        return running;
+    }, [workspaceStats, nodes]);
 
     // Save Function
     const saveWorkspace = async () => {
@@ -681,7 +716,7 @@ export function NodeEditor() {
                         <ComponentLibrary />
                     </div>
 
-                    <CanvasArea />
+                    <CanvasArea runningNodeIds={runningNodeIds} />
 
                     <div className={`transition-all duration-300 ease-in-out border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden absolute right-0 top-0 bottom-0 z-10 shadow-xl ${useCanvasStore(s => s.selectedNodeId) ? 'w-80 translate-x-0' : 'w-0 translate-x-full'}`}>
                         <ConfigPanel />

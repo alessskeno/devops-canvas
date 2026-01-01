@@ -7,7 +7,11 @@ import { CanvasNode as NodeType } from '../../types';
 import { ContextMenu } from './ContextMenu';
 import { COMPONENT_CONFIG_SCHEMAS } from '../../utils/componentConfigSchemas';
 
-export function CanvasArea() {
+interface CanvasAreaProps {
+    runningNodeIds?: Set<string>;
+}
+
+export function CanvasArea({ runningNodeIds }: CanvasAreaProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const mouseRef = useRef({ x: 0, y: 0 });
 
@@ -216,6 +220,11 @@ export function CanvasArea() {
                         const x2 = toNode.position.x;
                         const y2 = toNode.position.y + 53;
 
+                        // Determine if connection should be animated
+                        // Both source and target must be running
+                        const isRunning = runningNodeIds?.has(fromNode.id) && runningNodeIds?.has(toNode.id);
+                        const isAnimated = activeConn.animated || isRunning;
+
                         return (
                             <ConnectionLine
                                 key={activeConn.id}
@@ -223,7 +232,8 @@ export function CanvasArea() {
                                 y1={y1}
                                 x2={x2}
                                 y2={y2}
-                                animated={activeConn.animated}
+                                animated={isAnimated}
+                                status={isRunning ? 'running' : 'default'}
                                 onRemove={() => removeConnection(activeConn.id)}
                             />
                         );

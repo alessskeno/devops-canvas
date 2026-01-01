@@ -39,7 +39,7 @@ func NewDockerMonitor(hub *realtime.Hub) *DockerMonitor {
 }
 
 func (m *DockerMonitor) Start() {
-    ticker := time.NewTicker(3 * time.Second)
+    ticker := time.NewTicker(1 * time.Second)
     go func() {
         for range ticker.C {
             m.collectAndBroadcast()

@@ -7,13 +7,14 @@ interface ConnectionLineProps {
     y2: number;
     animated?: boolean;
     isDraft?: boolean;
+    status?: 'default' | 'running'; // New Prop
 
     onRemove?: () => void;
 }
 
 
 
-export function ConnectionLine({ x1, y1, x2, y2, animated, isDraft, onRemove }: ConnectionLineProps) {
+export function ConnectionLine({ x1, y1, x2, y2, animated, isDraft, status = 'default', onRemove }: ConnectionLineProps) {
     const [isHovered, setIsHovered] = React.useState(false);
 
     // Beizer Curve Calculation
@@ -33,6 +34,11 @@ export function ConnectionLine({ x1, y1, x2, y2, animated, isDraft, onRemove }: 
 
     const pathData = `M ${x1} ${y1} C ${controlPoint1X} ${controlPoint1Y} ${controlPoint2X} ${controlPoint2Y} ${x2} ${y2}`;
 
+    // Color Logic
+    let strokeClass = 'stroke-gray-400 dark:stroke-gray-500';
+    if (isDraft) strokeClass = 'stroke-blue-400 dark:stroke-blue-500';
+    else if (status === 'running') strokeClass = 'stroke-green-500 dark:stroke-green-400';
+
     return (
         <g
             className={isDraft ? "opacity-60 pointer-events-none" : "pointer-events-auto"}
@@ -50,9 +56,9 @@ export function ConnectionLine({ x1, y1, x2, y2, animated, isDraft, onRemove }: 
             <path
                 d={pathData}
                 fill="none"
-                strokeWidth="2"
+                strokeWidth="2" // Maybe thicker for running?
                 className={`
-                    ${isDraft ? 'stroke-blue-400 dark:stroke-blue-500' : 'stroke-gray-400 dark:stroke-gray-500'} 
+                    ${strokeClass} 
                     ${isHovered && !isDraft ? 'stroke-red-400 dark:stroke-red-500' : ''}
                     ${animated ? 'animate-[dash_1s_linear_infinite]' : ''}
                 `}

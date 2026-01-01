@@ -52,3 +52,9 @@
 .dark ::-webkit-scrollbar-thumb {
     @apply bg-slate-800 hover:bg-slate-700;
 }
+
+@keyframes dash {
+  to {
+    stroke-dashoffset: -10;
+  }
+}
