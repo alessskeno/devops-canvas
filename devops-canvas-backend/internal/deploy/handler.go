@@ -90,7 +90,9 @@ func (h *Handler) GetLogs(w http.ResponseWriter, r *http.Request) {
     
     // In our MVP, deployID is the workspaceID because we overwrite the deployment in /tmp/workspaces/{id}
     workspaceID := chi.URLParam(r, "deployID")
-    logs, err := h.svc.GetLogs(r.Context(), workspaceID)
+    componentID := r.URL.Query().Get("component_id")
+
+    logs, err := h.svc.GetLogs(r.Context(), workspaceID, componentID)
     if err != nil {
         h.respondError(w, http.StatusInternalServerError, err.Error())
         return

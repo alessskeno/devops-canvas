@@ -62,8 +62,8 @@ export function DeploymentProgress({ isOpen, onClose, onCancel, logs, steps }: D
                                                     <Circle size={22} className="text-gray-300" />
                                     }
                                     <span className={`text-sm font-medium ${step.status === 'in-progress' ? 'text-blue-600' :
-                                            step.status === 'error' ? 'text-red-700 dark:text-red-400' :
-                                                'text-gray-700 dark:text-gray-300'
+                                        step.status === 'error' ? 'text-red-700 dark:text-red-400' :
+                                            'text-gray-700 dark:text-gray-300'
                                         }`}>
                                         {step.label}
                                     </span>
@@ -78,8 +78,17 @@ export function DeploymentProgress({ isOpen, onClose, onCancel, logs, steps }: D
 
                         {isComplete && (
                             <div className="pt-4 animate-in fade-in slide-in-from-bottom-2">
-                                <span className="text-xs text-green-600 font-medium bg-green-50 px-2 py-1 rounded">Workspace is live!</span>
-                                <p className="text-[10px] text-gray-400 mt-1">All services are healthy and reachable.</p>
+                                {steps[steps.length - 1]?.label === 'Workspace Stopped' ? (
+                                    <>
+                                        <span className="text-xs text-gray-600 font-medium bg-gray-100 dark:bg-gray-800 dark:text-gray-300 px-2 py-1 rounded">Workspace Stopped</span>
+                                        <p className="text-[10px] text-gray-400 mt-1">All resources have been terminated.</p>
+                                    </>
+                                ) : (
+                                    <>
+                                        <span className="text-xs text-green-600 font-medium bg-green-50 px-2 py-1 rounded">Workspace is live!</span>
+                                        <p className="text-[10px] text-gray-400 mt-1">All services are healthy and reachable.</p>
+                                    </>
+                                )}
                             </div>
                         )}
                     </div>

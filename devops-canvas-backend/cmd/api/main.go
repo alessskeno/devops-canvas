@@ -98,12 +98,7 @@ func main() {
 		teamHandler.RegisterRoutes(r)
 
 		// Workspace Module
-		workspaceRepo := workspace.NewRepository()
-		workspaceSvc := workspace.NewService(workspaceRepo)
-		workspaceHandler := workspace.NewHandler(workspaceSvc, authSvc)
-		workspaceHandler.RegisterRoutes(r)
-
-		// Deploy Module
+		// Deploy Module (Moved up to satisfy dependency)
 		deployRepo := deploy.NewRepository()
         manifestGenerator := deploy.NewManifestGenerator()
         
@@ -115,9 +110,17 @@ func main() {
             dockerClient = nil
         }
         
+        // Workspace Module (Repo Needed for Deploy)
+		workspaceRepo := workspace.NewRepository()
+        
 		deploySvc := deploy.NewService(deployRepo, workspaceRepo, manifestGenerator, hub, dockerClient) // Injected Hub and Docker Client
 		deployHandler := deploy.NewHandler(deploySvc, authSvc)
 		deployHandler.RegisterRoutes(r)
+
+        // Workspace Module Svc & Handler
+		workspaceSvc := workspace.NewService(workspaceRepo)
+		workspaceHandler := workspace.NewHandler(workspaceSvc, authSvc, deploySvc) // Injected Deploy Svc
+		workspaceHandler.RegisterRoutes(r)
 
 		r.Get("/version", func(w http.ResponseWriter, r *http.Request) {
             w.Header().Set("Content-Type", "application/json")

@@ -84,6 +84,34 @@ func (s *Service) DeployWorkspace(ctx context.Context, workspaceID string) (stri
     }
     s.broadcastStep(workspaceID, "generating", "completed", "Generating Manifests", "")
 
+    // Check if manifest implies an empty deployment (i.e., all components disabled)
+    hasServices := false
+    
+    // Check Docker Compose Services
+    if compose, ok := manifests["docker_compose"].(map[string]interface{}); ok {
+        if services, ok := compose["services"].(map[string]translator.ComposeService); ok && len(services) > 0 {
+            hasServices = true
+        }
+    }
+    
+    // Check Kind/Helm Dependencies
+    if chart, ok := manifests["chart_yaml"].(translator.ChartMetadata); ok {
+        if len(chart.Dependencies) > 0 {
+            hasServices = true
+        }
+    }
+
+    if !hasServices {
+        s.broadcastStep(workspaceID, "provisioning", "in-progress", "Cleaning up resources (nothing to deploy)", "")
+        if err := s.TeardownWorkspace(ctx, workspaceID); err != nil {
+             s.broadcastStep(workspaceID, "provisioning", "error", "Cleanup Failed", err.Error())
+             return "", err
+        }
+        s.broadcastStep(workspaceID, "provisioning", "completed", "Cleanup Complete", "")
+        s.broadcastStep(workspaceID, "verified", "completed", "Workspace Stopped", "")
+        return "stopped", nil
+    }
+
     // 3. Prepare Directory
     baseDir = fmt.Sprintf("/tmp/workspaces/%s", workspaceID)
     if err := os.MkdirAll(filepath.Join(baseDir, "configs"), 0755); err != nil {
@@ -203,32 +231,81 @@ func (s *Service) DeployWorkspace(ctx context.Context, workspaceID string) (stri
 func (s *Service) TeardownWorkspace(ctx context.Context, workspaceID string) error {
     baseDir := fmt.Sprintf("/tmp/workspaces/%s", workspaceID)
     
-    // Check if it's Kind (simple check via file existence)
-    isKind := false
-    if _, err := os.Stat(filepath.Join(baseDir, "configs", "kind-config.yaml")); err == nil {
-        isKind = true
+    // 1. Clean up Kind Cluster (Always try)
+    // Cluster name convention: ws-{workspaceID}
+    clusterName := fmt.Sprintf("ws-%s", workspaceID)
+    // We suppress output/error because if it doesn't exist, that's fine.
+    _ = exec.CommandContext(ctx, "kind", "delete", "cluster", "--name", clusterName).Run()
+
+    // 2. Clean up Docker Compose
+    // Attempt standard down if file exists
+    configPath := filepath.Join(baseDir, "docker-compose.yaml")
+    if _, err := os.Stat(configPath); err == nil {
+        cmd := exec.CommandContext(ctx, "docker", "compose", "-p", workspaceID, "-f", "docker-compose.yaml", "down", "--remove-orphans", "--volumes")
+        cmd.Dir = baseDir
+        if err := cmd.Run(); err != nil {
+             // Log error but continue to Force Cleanup
+             fmt.Printf("Standard docker compose down failed: %v\n", err)
+        }
     }
-    
-    s.cleanupDeployment(ctx, workspaceID, baseDir, isKind)
+
+    // 3. Force Cleanup via Docker Client (Safety Net)
+    // Remove any containers labeled with this project, in case file was missing or down failed
+    if s.dockerClient != nil {
+        filterArgs := filters.NewArgs()
+        filterArgs.Add("label", fmt.Sprintf("com.docker.compose.project=%s", workspaceID))
+        
+        containers, err := s.dockerClient.ContainerList(ctx, container.ListOptions{All: true, Filters: filterArgs})
+        if err == nil {
+            for _, c := range containers {
+                // Force remove
+                _ = s.dockerClient.ContainerRemove(ctx, c.ID, container.RemoveOptions{Force: true, RemoveVolumes: true})
+            }
+        }
+    }
+
+    // 4. Clean up temp directory
+    _ = os.RemoveAll(baseDir)
+
     return nil
 }
 
 func (s *Service) cleanupDeployment(ctx context.Context, workspaceID, baseDir string, isKind bool) {
-    if isKind {
-        clusterName := fmt.Sprintf("ws-%s", workspaceID)
-        exec.CommandContext(ctx, "kind", "delete", "cluster", "--name", clusterName).Run()
-    } else {
-        cmd := exec.CommandContext(ctx, "docker", "compose", "-p", workspaceID, "-f", "docker-compose.yaml", "down", "--remove-orphans")
-        cmd.Dir = baseDir
-        cmd.Run()
-    }
+    // Legacy helper, now forwarding to TeardownWorkspace for consistency if needed, 
+    // or keep simple for internal rollback. 
+    // Actually, let's make cleanupDeployment just call TeardownWorkspace to DRY.
+    s.TeardownWorkspace(ctx, workspaceID)
 }
 
-func (s *Service) GetLogs(ctx context.Context, workspaceID string) ([]string, error) {
-    // Check if directory exists
+func (s *Service) GetLogs(ctx context.Context, workspaceID string, componentID string) ([]string, error) {
+    // Check if directory exists (deployment check)
     baseDir := fmt.Sprintf("/tmp/workspaces/%s", workspaceID)
     if _, err := os.Stat(baseDir); os.IsNotExist(err) {
         return []string{"No deployment found (directory missing)"}, nil
+    }
+
+    // Determine target service name if componentID is provided
+    targetServiceName := ""
+    if componentID != "" {
+        // We need to look up the node to match the naming convention: "{type}-{id[:4]}"
+        // We can fetch the canvas.
+        canvas, err := s.workspaceRepo.GetCanvas(ctx, workspaceID)
+        if err == nil {
+            for _, node := range canvas.Nodes {
+                if node.ID == componentID {
+                     // Infrastructure nodes (docker-compose, kind-cluster) imply "show all" logic usually,
+                     // but if user specifically asked for them, we might treat them as "all" or specific?
+                     // Request says: "component configuration tab > log" -> specific.
+                     // "docker compose or kind cluster configuration tab > log" -> all.
+                     if node.Type == "docker-compose" || node.Type == "kind-cluster" {
+                         targetServiceName = "" // Fetch all
+                     } else {
+                         targetServiceName = fmt.Sprintf("%s-%s", node.Type, node.ID[:4])
+                     }
+                     break
+                }
+            }
+        }
     }
 
     // Check for Kind Config
@@ -238,40 +315,84 @@ func (s *Service) GetLogs(ctx context.Context, workspaceID string) ([]string, er
     }
 
     if isKind {
-        // Fetch logs using kubectl
-        // Logic: Get pods in namespace, then get logs
-        // namespace = ws-{workspaceID}
+        // Kind / Kubernetes Logic
         namespace := fmt.Sprintf("ws-%s", workspaceID)
-        clusterName := fmt.Sprintf("ws-%s", workspaceID) // Match DeployKubernetes naming
-        
-        // We need kubeconfig context. Kind sets it to `kind-{clusterName}`
+        clusterName := fmt.Sprintf("ws-%s", workspaceID)
         contextName := fmt.Sprintf("kind-%s", clusterName)
 
-        // Since getting logs for ALL pods is complex with just kubectl logs (needs selectors or loop),
-        // we can try fetching logs for a known label like `release=devops-canvas-chart`
-        // `kubectl logs -l release=devops-canvas-chart --all-containers --max-log-requests=10`
-        cmd := exec.Command("kubectl", "logs", "-l", "release=devops-canvas-chart", 
-            "--all-containers", 
+        // If targetServiceName is set, we find the specific pod(s) first
+        // Pods are typically named like "release-alias-deployment-hash"
+        // Our alias is targetServiceName.
+        // So we want pods where name contains targetServiceName.
+        
+        // 1. Get All Pods in Namespace
+        cmd := exec.Command("kubectl", "get", "pods", 
             "--namespace", namespace,
             "--context", contextName,
-            "--tail", "50",
+            "-o", "jsonpath={.items[*].metadata.name}",
         )
-        // cmd.Dir = baseDir // Not strictly needed for kubectl if context is set
         output, err := cmd.CombinedOutput()
         if err != nil {
-            // It might fail if no pods are running yet
-            return []string{fmt.Sprintf("Waiting for pods... (%v)", err)}, nil
+             return []string{fmt.Sprintf("Error listing pods: %v", err)}, nil
         }
-        return strings.Split(string(output), "\n"), nil
+        
+        allPods := strings.Fields(string(output))
+        if len(allPods) == 0 {
+            return []string{"No pods found"}, nil
+        }
+        
+        var targetPods []string
+        if targetServiceName != "" {
+            for _, podName := range allPods {
+                if strings.Contains(podName, targetServiceName) {
+                    targetPods = append(targetPods, podName)
+                }
+            }
+            if len(targetPods) == 0 {
+                return []string{fmt.Sprintf("No pods found for component %s (%s)", componentID, targetServiceName)}, nil
+            }
+        } else {
+            targetPods = allPods
+        }
+        
+        // 2. Fetch logs for target pods
+        var allLogs []string
+        
+        // Parallelize or sequential? Sequential is safer for now.
+        // Limit total pods to avoid timeouts?
+        if len(targetPods) > 10 {
+            targetPods = targetPods[:10]
+            allLogs = append(allLogs, "[System] Log output limited to first 10 pods...")
+        }
+        
+        for _, pod := range targetPods {
+            cmd := exec.Command("kubectl", "logs", pod,
+                "--all-containers",
+                "--namespace", namespace,
+                "--context", contextName,
+                "--tail", "50",
+            )
+            out, err := cmd.CombinedOutput()
+            if err != nil {
+                allLogs = append(allLogs, fmt.Sprintf("[%s] Error: %v", pod, err))
+            } else {
+                lines := strings.Split(string(out), "\n")
+                for _, l := range lines {
+                    if strings.TrimSpace(l) != "" {
+                        allLogs = append(allLogs, fmt.Sprintf("[%s] %s", pod, l))
+                    }
+                }
+            }
+        }
+        
+        return allLogs, nil
+
     } else {
-         // Use Docker SDK for efficient non-blocking logs
+         // Docker Compose Logic
         if s.dockerClient == nil {
              return []string{"Docker client not initialized"}, nil
         }
 
-        // List containers for this project
-        // Docker Compose adds label: com.docker.compose.project={workspaceID}
-        // Note: docker compose project name is exactly workspaceID in our DeployWorkspace call
         filterArgs := filters.NewArgs()
         filterArgs.Add("label", fmt.Sprintf("com.docker.compose.project=%s", workspaceID))
         
@@ -286,19 +407,27 @@ func (s *Service) GetLogs(ctx context.Context, workspaceID string) ([]string, er
 
         var allLogs []string
 
-        // For each container, fetch logs (just tail)
         for _, c := range containers {
-            // Include container name header
+            // Determine name
             name := ""
             if len(c.Names) > 0 { 
-                // Names are like /project-service-1, strip slash
                 name = strings.TrimPrefix(c.Names[0], "/")
+            }
+            
+            // Filter
+            if targetServiceName != "" {
+                 // Container matching: project-service-1
+                 // Service name in manifest: targetServiceName
+                 // Match if name contains targetServiceName
+                 if !strings.Contains(name, targetServiceName) {
+                     continue
+                 }
             }
 
             options := container.LogsOptions{
                 ShowStdout: true,
                 ShowStderr: true,
-                Tail:       "20", // Limit per container
+                Tail:       "50", 
             }
             
             out, err := s.dockerClient.ContainerLogs(ctx, c.ID, options)
@@ -307,9 +436,6 @@ func (s *Service) GetLogs(ctx context.Context, workspaceID string) ([]string, er
                 continue
             }
             
-            // Read all logs
-            // Docker API returns raw stream with headers if TTY=false.
-            // For MVP, we read and sanitize crudely.
             configBytes, _ := io.ReadAll(out)
             out.Close()
             
@@ -318,17 +444,25 @@ func (s *Service) GetLogs(ctx context.Context, workspaceID string) ([]string, er
             
             for _, l := range lines {
                 if strings.TrimSpace(l) != "" {
-                    // Simple heuristic to skip binary header (starts with 01/02 and size)
-                     // If line is very short and unprintable, maybe skip
                      cleanLine := l
                      if len(l) > 8 {
-                         // Check first byte?
-                         // Just act naive for now, it mostly renders okay in browser or shows generic garbage
-                         // Better: Clean special chars?
+                         // Very basic binary header stripping (docker stdcopy)
+                         // Header is 8 bytes.
+                         // But we readAll... Wait, if using TTY=false (default), we get header.
+                         // Let's strip first 8 bytes if they look binary?
+                         // Actually, standard approach: stdcopy.StdCopy.
+                         // But for simplicity in this MVP string handling:
+                         if l[0] < 32 { // Binary-ish
+                             cleanLine = l[8:]
+                         }
                      }
                     allLogs = append(allLogs, fmt.Sprintf("[%s] %s", name, cleanLine))
                 }
             }
+        }
+        
+        if len(allLogs) == 0 && targetServiceName != "" {
+             return []string{fmt.Sprintf("No logs found for component %s", targetServiceName)}, nil
         }
         
         return allLogs, nil

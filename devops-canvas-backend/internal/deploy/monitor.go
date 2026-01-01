@@ -32,10 +32,14 @@ type WorkspaceStats struct {
 
 type DockerMonitor struct {
     Hub *realtime.Hub
+    lastKnownWorkspaces map[string]bool
 }
 
 func NewDockerMonitor(hub *realtime.Hub) *DockerMonitor {
-    return &DockerMonitor{Hub: hub}
+    return &DockerMonitor{
+        Hub: hub,
+        lastKnownWorkspaces: make(map[string]bool),
+    }
 }
 
 func (m *DockerMonitor) Start() {
@@ -49,8 +53,6 @@ func (m *DockerMonitor) Start() {
 
 func (m *DockerMonitor) collectAndBroadcast() {
     // Fetch all stats as JSON
-    // format: {{json .}} with explicit fields if needed, or default json structure
-    // Docker 1.13+ supports {{json .}}
     cmd := exec.Command("docker", "stats", "--format", "{{json .}}", "--no-stream")
     output, err := cmd.Output()
     if err != nil {
@@ -58,63 +60,13 @@ func (m *DockerMonitor) collectAndBroadcast() {
         return
     }
 
-    // Output is line-delimited JSON objects
     lines := strings.Split(string(output), "\n")
-    
-    // Group by Workspace (Project Name)
-    // We assume project name == workspaceID (used in `DeployWorkspace` with -p flag)
-    // But `docker stats` output JSON might not contain labels directly in default formatter...
-    // Name is usually `project-service-1`.
-    // We might need `docker ps` to map names to labels if we want to be robust.
-    // OR, we just assume `workspaceID` is the prefix of the container name?
-    // In `service.go` we used `-p workspaceID`. Docker Compose names containers `project-service-N`.
-    // So container names will look like `workspaceID-service-1` (if no custom name)
-    // OR `project_service_1` (underscore/dash depends on version).
-    // `docker compose` v2 usually uses dashes.
-    
-    // Let's use `docker ps --format "{{.Details}}"` ? No.
-    
-    // Simpler: Just map container names to stats.
-    // But `docker stats` doesn't give us the Project Label easily in the JSON output unless we do complex formatting.
-    // Let's rely on naming convention or project prefix?
-    // If I use `-p workspaceID`, the containers are usually named `workspaceID-service-1`.
-    
-    // Actually, let's try to get labels from `docker ps` first? Too many calls.
-    
-    // Let's stick to parsing `Name`.
     workspaceMap := make(map[string][]ContainerStat)
-    
-    for _, line := range lines {
-        if strings.TrimSpace(line) == "" {
-            continue
-        }
-        var stat ContainerStat
-        if err := json.Unmarshal([]byte(line), &stat); err != nil {
-            continue
-        }
-        
-        // Infer Workspace ID from Name?
-        // If we ran `docker compose -p {uuid} ...`, names are `{uuid}-{service}-{num}`.
-        // UUIDs are unique enough.
-        // But wait, `docker compose` might use underscores.
-        // Also UUIDs are long.
-        
-        // Alternative: Broadcast ALL stats to EVERYONE and let frontend filter?
-        // That leaks info if we have multi-tenancy.
-        // But for this single-user(ish) MVP, passing all container stats might be "okay" but heavy.
-        
-        // Better: We know valid workspace IDs from... nowhere here.
-        // Let's try to grab the label `com.docker.compose.project`.
-        // `docker stats` output usually doesn't include labels.
-        
-        // We can run `docker ps --format "{{.Names}}\t{{.Label \"com.docker.compose.project\"}}"` separately to build a mapping?
-        // This is cheap.
-    }
-    
+    currentWorkspaces := make(map[string]bool)
+
     // Mapping approach
     nameToProject, err := m.getContainerProjectMapping()
     if err != nil {
-        // Log but don't crash
         return 
     }
     
@@ -126,10 +78,11 @@ func (m *DockerMonitor) collectAndBroadcast() {
          project, ok := nameToProject[stat.Name]
          if ok && project != "" {
              workspaceMap[project] = append(workspaceMap[project], stat)
+             currentWorkspaces[project] = true
          }
     }
     
-    // Broadcast per workspace
+    // Broadcast per workspace (Active ones)
     for wsID, stats := range workspaceMap {
         var totalCPU float64
         var totalMem float64
@@ -148,7 +101,29 @@ func (m *DockerMonitor) collectAndBroadcast() {
         }
         
         bytes, _ := json.Marshal(msg)
-        m.Hub.BroadcastToLocal(bytes) // This broadcasts to ALL clients.
+        m.Hub.BroadcastToLocal(bytes)
+        
+        // Mark as known
+        m.lastKnownWorkspaces[wsID] = true
+    }
+    
+    // Check for Workspaces that disappeared (Transition to 0 containers)
+    for wsID := range m.lastKnownWorkspaces {
+        if !currentWorkspaces[wsID] {
+            // Workspace was active, now gone. Send empty stats.
+             msg := WorkspaceStats{
+                Type:        "workspace_stats",
+                WorkspaceID: wsID,
+                Containers:  []ContainerStat{},
+                TotalCPU:    0,
+                TotalMem:    0,
+            }
+            bytes, _ := json.Marshal(msg)
+            m.Hub.BroadcastToLocal(bytes)
+            
+            // Remove from known
+            delete(m.lastKnownWorkspaces, wsID)
+        }
     }
 }
 

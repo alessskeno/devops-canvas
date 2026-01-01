@@ -332,17 +332,84 @@ export function ConfigPanel() {
                 )}
 
                 {currentTab === 'Logs' && (
-                    <div className="bg-slate-950 text-slate-300 p-3 rounded-md font-mono text-[10px] leading-relaxed h-full overflow-y-auto">
-                        <div className="text-green-400">{'>'} Container starting...</div>
-                        <div className="text-slate-500">{'>'} [System] Allocated {selectedNode.data.resources?.cpu || 0.5} vCPU</div>
-                        <div>{'>'} Mounting volume /data...</div>
-                        <div>{'>'} Service listening on port {selectedNode.data.port || 8080}</div>
-                        <div className="animate-pulse">{'_'}</div>
-                    </div>
+                    <LogViewer workspaceId={selectedNode.data.workspace_id || selectedNode.id /* Fallback/Context issue? */} componentId={selectedNode.id} />
                 )}
             </div>
+        </div>
+    );
+}
 
+// Sub-component to handle log fetching logic cleanly
+function LogViewer({ workspaceId, componentId }: { workspaceId?: string, componentId: string }) {
+    // Note: We need workspaceId. The node data might not have it directly if we didn't inject it.
+    // But we are in the canvas ctx. 
+    // Actually, we can get workspaceId from the URL (useParams) or from a store check.
+    // The safest is useParams but we are not inside a Route here directly? The parent is.
+    // Let's use window location strictly as fallback or pass it from parent?
+    // Parent `ConfigPanel` is inside `NodeEditor` maybe?
+    // Let's assume we can get it from the URL since we are on /workspace/:id
 
+    const [logs, setLogs] = useState<string[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+
+    // Extract workspace ID from URL
+    const pathname = window.location.pathname;
+    const match = pathname.match(/\/workspace\/([^\/]+)/);
+    const actualWorkspaceId = match ? match[1] : '';
+
+    const fetchLogs = React.useCallback(async () => {
+        if (!actualWorkspaceId) return;
+        setLoading(true);
+        setError('');
+        try {
+            const res = await api.get(`/deploy/${actualWorkspaceId}/logs?component_id=${componentId}`);
+            if (res.data && res.data.logs) {
+                setLogs(res.data.logs);
+            } else {
+                setLogs(['No logs returned.']);
+            }
+        } catch (err: any) {
+            setError(err.message || 'Failed to fetch logs');
+            setLogs([]);
+        } finally {
+            setLoading(false);
+        }
+    }, [actualWorkspaceId, componentId]);
+
+    React.useEffect(() => {
+        fetchLogs();
+        // Optional: Auto-poll? Let's just do manual refresh for now for simplicity/performance.
+    }, [fetchLogs]);
+
+    return (
+        <div className="flex flex-col h-full">
+            <div className="flex justify-between items-center mb-2 px-1">
+                <span className="text-[10px] font-bold text-slate-500 uppercase">Console Output</span>
+                <button
+                    onClick={fetchLogs}
+                    className="text-[10px] text-blue-600 hover:text-blue-800 flex items-center bg-blue-50 px-2 py-1 rounded"
+                    disabled={loading}
+                >
+                    {loading ? 'Refreshing...' : 'Refresh Logs'}
+                </button>
+            </div>
+
+            <div className="flex-1 bg-slate-950 text-slate-300 p-3 rounded-md font-mono text-[10px] leading-relaxed overflow-y-auto whitespace-pre-wrap">
+                {error && <div className="text-red-400 mb-2">[Error] {error}</div>}
+
+                {!loading && logs.length === 0 && !error && (
+                    <div className="text-slate-500 italic">No logs available (container might be starting or stopped).</div>
+                )}
+
+                {logs.map((line, i) => (
+                    <div key={i} className="border-b border-white/5 pb-0.5 mb-0.5 last:border-0 last:mb-0">
+                        {line}
+                    </div>
+                ))}
+
+                {loading && logs.length > 0 && <div className="text-blue-400 mt-2 animate-pulse">Updating...</div>}
+            </div>
         </div>
     );
 }

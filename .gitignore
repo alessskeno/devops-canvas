@@ -1,0 +1,42 @@
+# Dependencies
+node_modules
+.pnp
+.pnp.js
+
+# Testing
+coverage
+
+# Production
+dist
+build
+
+# Misc
+.DS_Store
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Go Binaries and Build Artifacts
+devops-canvas-backend/devops-canvas-backend
+devops-canvas-backend/main
+*.exe
+*.test
+*.prof
+
+# Terraform / Infrastructure
+.terraform
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.backup
+
+# IDE
+.idea
+.vscode
+*.swp

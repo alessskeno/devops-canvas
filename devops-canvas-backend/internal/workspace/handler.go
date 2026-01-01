@@ -4,18 +4,27 @@ import (
     "encoding/json"
     "net/http"
     "strings"
+    "log"
+    "context"
     "github.com/go-chi/chi/v5"
     "devops-canvas-backend/internal/auth"
     "devops-canvas-backend/internal/models"
 )
 
-type Handler struct {
-    svc     *Service
-    authSvc *auth.Service
+// DeploymentService defines the methods required from the deploy package
+// locally to avoid circular dependencies (deploy -> workspace -> deploy)
+type DeploymentService interface {
+    TeardownWorkspace(ctx context.Context, workspaceID string) error
 }
 
-func NewHandler(svc *Service, authSvc *auth.Service) *Handler {
-    return &Handler{svc: svc, authSvc: authSvc}
+type Handler struct {
+    svc       *Service
+    authSvc   *auth.Service
+    deploySvc DeploymentService
+}
+
+func NewHandler(svc *Service, authSvc *auth.Service, deploySvc DeploymentService) *Handler {
+    return &Handler{svc: svc, authSvc: authSvc, deploySvc: deploySvc}
 }
 
 func (h *Handler) RegisterRoutes(r chi.Router) {
@@ -24,7 +33,7 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
         r.Post("/", h.CreateWorkspace)
         r.Get("/{id}", h.GetWorkspace)
         r.Put("/{id}", h.UpdateWorkspace)
-        r.Put("/{id}", h.UpdateWorkspace)
+//        r.Put("/{id}", h.UpdateWorkspace) // Duplicate removed
         r.Post("/{id}/duplicate", h.DuplicateWorkspace)
         r.Delete("/{id}", h.DeleteWorkspace)
         r.Get("/{id}/canvas", h.GetCanvas)
@@ -261,13 +270,21 @@ func (h *Handler) DeleteWorkspace(w http.ResponseWriter, r *http.Request) {
         return
     }
 
+    // 3. Teardown Resources (Best Effort)
+    // We log errors but proceed with deletion to prevent orphaned database records.
+    if h.deploySvc != nil {
+        if err := h.deploySvc.TeardownWorkspace(r.Context(), workspaceID); err != nil {
+            log.Printf("Failed to teardown workspace resources for %s: %v", workspaceID, err)
+        }
+    }
+
     if err := h.svc.DeleteWorkspace(r.Context(), workspaceID); err != nil {
         h.respondError(w, http.StatusInternalServerError, "Failed to delete workspace: "+err.Error())
         return
     }
 
     w.WriteHeader(http.StatusOK)
-    json.NewEncoder(w).Encode(map[string]string{"message": "Workspace deleted"})
+    json.NewEncoder(w).Encode(map[string]string{"message": "Workspace and associated resources deleted"})
 }
 
 func (h *Handler) getUserId(r *http.Request) (string, error) {

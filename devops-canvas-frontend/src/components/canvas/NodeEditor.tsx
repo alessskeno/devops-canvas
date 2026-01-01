@@ -90,7 +90,9 @@ export function NodeEditor() {
                 };
 
                 // Auto-complete previous steps
-                if (payload.status === 'in-progress') {
+                // If we receive an update for step N (being in-progress or completed), 
+                // it implies all steps 0..N-1 are completed.
+                if (payload.status === 'in-progress' || payload.status === 'completed') {
                     for (let i = 0; i < idx; i++) {
                         if (newSteps[i].status !== 'completed') newSteps[i].status = 'completed';
                     }
