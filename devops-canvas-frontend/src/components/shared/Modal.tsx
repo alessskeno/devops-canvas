@@ -5,9 +5,9 @@ import { createPortal } from 'react-dom';
 interface ModalProps {
     isOpen: boolean;
     onClose: () => void;
-    title: string;
+    title: React.ReactNode;
     children: React.ReactNode;
-    size?: 'sm' | 'md' | 'lg' | 'xl';
+    size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | 'full';
 }
 
 export function Modal({ isOpen, onClose, title, children, size = 'md' }: ModalProps) {
@@ -18,6 +18,8 @@ export function Modal({ isOpen, onClose, title, children, size = 'md' }: ModalPr
         md: 'max-w-md',
         lg: 'max-w-lg',
         xl: 'max-w-xl',
+        '2xl': 'max-w-2xl',
+        'full': 'max-w-[95vw] h-[90vh]',
     };
 
     return createPortal(

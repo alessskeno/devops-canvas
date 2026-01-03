@@ -101,6 +101,13 @@ func (s *Service) DeployWorkspace(ctx context.Context, workspaceID string) (stri
         }
     }
 
+    // Fix: Allow deployment if Kind config exists (Infrastructure only deployment)
+    if configs, ok := manifests["configs"].(map[string]string); ok {
+        if _, exists := configs["kind-config.yaml"]; exists {
+            hasServices = true
+        }
+    }
+
     if !hasServices {
         s.broadcastStep(workspaceID, "provisioning", "in-progress", "Cleaning up resources (nothing to deploy)", "")
         if err := s.TeardownWorkspace(ctx, workspaceID); err != nil {
@@ -114,6 +121,10 @@ func (s *Service) DeployWorkspace(ctx context.Context, workspaceID string) (stri
 
     // 3. Prepare Directory
     baseDir = fmt.Sprintf("/tmp/workspaces/%s", workspaceID)
+    
+    // Clean up previous run configs to prevent stale state (e.g. old kind-config.yaml)
+    _ = os.RemoveAll(baseDir)
+    
     if err := os.MkdirAll(filepath.Join(baseDir, "configs"), 0755); err != nil {
         return "", fmt.Errorf("failed to create directory: %w", err)
     }
@@ -121,7 +132,11 @@ func (s *Service) DeployWorkspace(ctx context.Context, workspaceID string) (stri
     // 3. Write Config Files
     if configs, ok := manifests["configs"].(map[string]string); ok {
         for filename, content := range configs {
-            if err := os.WriteFile(filepath.Join(baseDir, "configs", filename), []byte(content), 0644); err != nil {
+            // Sanitize Config: Replace tabs with spaces to avoid YAML errors
+            // especially for user-provided Kind configs.
+            cleanContent := strings.ReplaceAll(content, "\t", "  ")
+            
+            if err := os.WriteFile(filepath.Join(baseDir, "configs", filename), []byte(cleanContent), 0644); err != nil {
                 return "", fmt.Errorf("failed to write config %s: %w", filename, err)
             }
         }
@@ -163,6 +178,13 @@ func (s *Service) DeployWorkspace(ctx context.Context, workspaceID string) (stri
         s.broadcastStep(workspaceID, "provisioning", "completed", "Provisioning Kind Cluster", "")
         s.broadcastStep(workspaceID, "verified", "completed", "Cluster Healthy", "")
         return status, nil
+    } else {
+        // If not deploying Kind, ensure any existing Kind cluster for this workspace is removed.
+        // This handles cases where user switches from Kind -> Docker Compose or disables Kind.
+        // We do this asynchronously or simply run it.
+        // Using "kind delete cluster" is safe even if it doesn't exist.
+        clusterName := fmt.Sprintf("ws-%s", workspaceID)
+        _ = exec.CommandContext(ctx, "kind", "delete", "cluster", "--name", clusterName).Run()
     }
 
     // 4. Write Docker Compose
@@ -325,6 +347,15 @@ func (s *Service) GetLogs(ctx context.Context, workspaceID string, componentID s
         // Our alias is targetServiceName.
         // So we want pods where name contains targetServiceName.
         
+        // 0. Always get Node Status for Context
+        nodesCmd := exec.Command("kubectl", "get", "nodes", "--context", contextName)
+        nodesOutput, _ := nodesCmd.CombinedOutput()
+        
+        var allLogs []string
+        if len(nodesOutput) > 0 {
+             allLogs = append(allLogs, fmt.Sprintf("[Cluster Nodes]\n%s", string(nodesOutput)))
+        }
+
         // 1. Get All Pods in Namespace
         cmd := exec.Command("kubectl", "get", "pods", 
             "--namespace", namespace,
@@ -333,12 +364,20 @@ func (s *Service) GetLogs(ctx context.Context, workspaceID string, componentID s
         )
         output, err := cmd.CombinedOutput()
         if err != nil {
+             // If we have node status, return that at least
+             if len(allLogs) > 0 {
+                 allLogs = append(allLogs, fmt.Sprintf("Error listing pods: %v", err))
+                 return allLogs, nil
+             }
              return []string{fmt.Sprintf("Error listing pods: %v", err)}, nil
         }
         
         allPods := strings.Fields(string(output))
         if len(allPods) == 0 {
-            return []string{"No pods found"}, nil
+            if len(allLogs) > 0 {
+                return allLogs, nil
+            }
+            return []string{"No pods found (Cluster is ready but empty)"}, nil
         }
         
         var targetPods []string
@@ -356,7 +395,6 @@ func (s *Service) GetLogs(ctx context.Context, workspaceID string, componentID s
         }
         
         // 2. Fetch logs for target pods
-        var allLogs []string
         
         // Parallelize or sequential? Sequential is safer for now.
         // Limit total pods to avoid timeouts?
@@ -641,14 +679,6 @@ func (s *Service) GenerateManifests(ctx context.Context, workspaceID string) (ma
         }
     }
 
-    chartMetadata := translator.ChartMetadata{
-        ApiVersion:   "v2",
-        Name:         "devops-canvas-chart",
-        Version:      "0.1.0",
-        Description:  "Generated by DevOps Canvas",
-        Dependencies: chartDependencies,
-    }
-
     // Construct final result
     result := map[string]interface{}{
         "configs":     configs,
@@ -667,9 +697,18 @@ func (s *Service) GenerateManifests(ctx context.Context, workspaceID string) (ma
         }
     }
 
-    if len(helmValues) > 0 || (enableAll || len(kindNodes) > 0) {
+    // Only generate Chart structure if we actually have dependencies or values to deploy.
+    // If we only have a Kind cluster and no services, we should NOT generate a chart,
+    // to prevent the Helm installer from running against an empty chart.
+    if len(helmValues) > 0 || len(chartDependencies) > 0 {
         result["helm_values"] = helmValues
-        result["chart_yaml"] = chartMetadata
+        result["chart_yaml"] = translator.ChartMetadata{
+            ApiVersion:   "v2",
+            Name:         "devops-canvas-chart",
+            Version:      "0.1.0",
+            Description:  "Generated by DevOps Canvas",
+            Dependencies: chartDependencies,
+        }
     }
 
     return result, nil

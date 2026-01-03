@@ -19,6 +19,8 @@ import { ExportModal } from '../modals/ExportModal';
 import { useRealtime } from '../../hooks/useRealtime';
 import { StatusBar } from '../layout/StatusBar';
 import { DeploymentProgress } from '../modals/DeploymentProgress';
+import { TerminalModal } from '../modals/TerminalModal';
+import { getComponentByType } from '../../utils/componentRegistry';
 
 interface DeploymentStep {
     label: string;
@@ -57,6 +59,30 @@ export function NodeEditor() {
     ]);
     const [showExportModal, setShowExportModal] = useState(false);
     const [showUnsavedModal, setShowUnsavedModal] = useState(false);
+
+    // Terminal State
+    const [terminalConfig, setTerminalConfig] = useState<{
+        isOpen: boolean;
+        componentId: string;
+        componentName: string;
+        componentType: string;
+    } | null>(null);
+
+    const handleNodeExec = (nodeId: string) => {
+        const node = nodes.find(n => n.id === nodeId);
+        if (!node) return;
+
+        // Find component definition to get proper name if needed, or use label
+        // Actually we used getComponentByType in import? Yes I added it.
+        const def = getComponentByType(node.type);
+
+        setTerminalConfig({
+            isOpen: true,
+            componentId: nodeId,
+            componentName: node.data.label || 'Component',
+            componentType: def?.name || node.type
+        });
+    };
 
     // Deployment Progress Handler
     useEffect(() => {
@@ -111,8 +137,19 @@ export function NodeEditor() {
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
     const [autoSaveEnabled, setAutoSaveEnabled] = useState(false);
     const autoSaveTimerRef = React.useRef<NodeJS.Timeout | null>(null);
-    const isFirstRender = React.useRef(true);
     const unsavedChangesRef = React.useRef(false);
+
+    // State Snapshot for Dirty Checking
+    const savedStateRef = React.useRef<string | null>(null);
+
+    // Helper to serialize state, excluding ephemeral fields like 'selected'
+    const serializeState = (n: any[], c: any[]) => {
+        const cleanNodes = n.map(node => {
+            const { selected, ...rest } = node;
+            return rest;
+        });
+        return JSON.stringify({ n: cleanNodes, c });
+    };
 
     // Sync ref with state
     useEffect(() => {
@@ -136,10 +173,13 @@ export function NodeEditor() {
         if (workspaceId) {
             fetchWorkspace(workspaceId);
             fetchCanvas(workspaceId).then(() => {
-                // Reset unsaved changes after load
+                // Initialize snapshot reference after load
+                // Use a small timeout to ensure store has propagated if needed, 
+                // though usually promise resolution is after store set.
                 setTimeout(() => {
+                    const store = useCanvasStore.getState();
+                    savedStateRef.current = serializeState(store.nodes, store.connections);
                     setHasUnsavedChanges(false);
-                    isFirstRender.current = true; // Reset first render tracker so initial population doesn't trigger dirty state
                 }, 100);
             });
         }
@@ -204,7 +244,11 @@ export function NodeEditor() {
             await saveCanvas(workspaceId);
             const now = new Date();
             setLastSaved(now);
+
+            // Update snapshot
+            savedStateRef.current = serializeState(nodes, connections);
             setHasUnsavedChanges(false);
+
             setIsAutoSaving(false);
             toast.success('Workspace saved');
         } catch (error: any) {
@@ -217,11 +261,17 @@ export function NodeEditor() {
 
     // Track Changes
     useEffect(() => {
-        if (isFirstRender.current) {
-            isFirstRender.current = false;
+        // If we haven't initialized the saved state yet (loading), ignore changes
+        if (savedStateRef.current === null) {
             return;
         }
-        setHasUnsavedChanges(true);
+
+        const current = serializeState(nodes, connections);
+        if (current !== savedStateRef.current) {
+            setHasUnsavedChanges(true);
+        } else {
+            setHasUnsavedChanges(false);
+        }
     }, [nodes, connections]);
 
     // Auto-Save Scheduler
@@ -718,7 +768,7 @@ export function NodeEditor() {
                         <ComponentLibrary />
                     </div>
 
-                    <CanvasArea runningNodeIds={runningNodeIds} />
+                    <CanvasArea runningNodeIds={runningNodeIds} onNodeExec={handleNodeExec} />
 
                     <div className={`transition-all duration-300 ease-in-out border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden absolute right-0 top-0 bottom-0 z-10 shadow-xl ${useCanvasStore(s => s.selectedNodeId) ? 'w-80 translate-x-0' : 'w-0 translate-x-full'}`}>
                         <ConfigPanel />
@@ -740,6 +790,18 @@ export function NodeEditor() {
 
             {/* 7. Export Modal */}
             <ExportModal isOpen={showExportModal} onClose={() => setShowExportModal(false)} />
+
+            {/* Terminal Modal */}
+            {terminalConfig && (
+                <TerminalModal
+                    isOpen={terminalConfig.isOpen}
+                    onClose={() => setTerminalConfig(null)}
+                    workspaceId={workspaceId || ''}
+                    componentId={terminalConfig.componentId}
+                    componentName={terminalConfig.componentName}
+                    componentType={terminalConfig.componentType}
+                />
+            )}
 
             {/* 8. Unsaved Changes Modal */}
             {showUnsavedModal && (

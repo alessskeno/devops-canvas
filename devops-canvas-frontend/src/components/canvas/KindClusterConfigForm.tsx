@@ -26,6 +26,7 @@ export function KindClusterConfigForm({ config, onChange, readOnly, nodes, conne
         'Advanced': false,
         'Preview': false
     });
+
     const [fetchedVersions, setFetchedVersions] = useState<{ label: string; value: string }[]>([]);
     const [loadingVersions, setLoadingVersions] = useState(false);
 
@@ -50,6 +51,7 @@ export function KindClusterConfigForm({ config, onChange, readOnly, nodes, conne
         };
         fetchVersions();
     }, []);
+    // ... (fetchedVersions logic unchanged)
 
     // Ensure config has all fields (migrations for existing nodes)
     const safeConfig: KindClusterConfig = {
@@ -77,6 +79,18 @@ export function KindClusterConfigForm({ config, onChange, readOnly, nodes, conne
         // Assuming file content is stored in 'content' field of data
         return fileNode?.data?.content as string;
     };
+
+    // Helper to determine final config for preview
+    const finalConfigContent = getAttachedFileContent() || generateKindConfig(safeConfig, undefined);
+
+    // ... (rest of logic)
+
+    // In Preview Section:
+    /*
+        <pre ...>
+            {finalConfigContent}
+        </pre>
+    */
 
     const toggleSection = (section: string) => {
         setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));

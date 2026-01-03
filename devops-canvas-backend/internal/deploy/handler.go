@@ -23,6 +23,7 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
         r.Post("/{workspaceID}/teardown", h.TeardownWorkspace)
         r.Post("/{workspaceID}/manifests", h.GenerateManifests)
         r.Get("/{deployID}/logs", h.GetLogs)
+        r.Get("/{workspaceID}/terminal", h.HandleTerminal)
     })
     
     // Config related routes

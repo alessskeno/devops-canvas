@@ -9,9 +9,10 @@ import { COMPONENT_CONFIG_SCHEMAS } from '../../utils/componentConfigSchemas';
 
 interface CanvasAreaProps {
     runningNodeIds?: Set<string>;
+    onNodeExec?: (nodeId: string) => void;
 }
 
-export function CanvasArea({ runningNodeIds }: CanvasAreaProps) {
+export function CanvasArea({ runningNodeIds, onNodeExec }: CanvasAreaProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const mouseRef = useRef({ x: 0, y: 0 });
 
@@ -285,6 +286,8 @@ export function CanvasArea({ runningNodeIds }: CanvasAreaProps) {
                                 setActivePanelTab('Logs');
                             }
                         }}
+                        onExec={() => onNodeExec?.(contextMenu.nodeId)}
+                        isRunning={runningNodeIds?.has(contextMenu.nodeId)}
                         onLock={() => toggleLockNode(contextMenu.nodeId)}
                         onDelete={() => removeNode(contextMenu.nodeId)}
                     />

@@ -271,5 +271,15 @@ export const COMPONENT_CONFIG_SCHEMAS: Record<string, ConfigField[]> = {
     'file': [
         { key: 'filename', label: 'Filename', type: 'text', defaultValue: 'config.yaml' },
         { key: 'content', label: 'File Content', type: 'textarea', placeholder: 'Write your configuration here...' }
+    ],
+    'kind-cluster': [
+        { key: 'name', label: 'Cluster Name', type: 'text', defaultValue: 'dev-cluster' },
+        {
+            key: 'configFile',
+            label: 'Or Select Config File Node',
+            type: 'node-select',
+            nodeType: 'file',
+            placeholder: 'Select a Config File Node (Overrides inline content)'
+        }
     ]
 };

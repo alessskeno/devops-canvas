@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Settings, Copy, FileText, Lock, Unlock, Trash2 } from 'lucide-react';
+import { Settings, Copy, FileText, Lock, Unlock, Trash2, Terminal as TerminalIcon } from 'lucide-react';
 
 interface ContextMenuProps {
     x: number;
@@ -9,13 +9,15 @@ interface ContextMenuProps {
     onEdit: () => void;
     onDuplicate: () => void;
     onLogs: () => void;
+    onExec: () => void;
     onLock: () => void;
     onDelete: () => void;
+    isRunning?: boolean;
 }
 
 export function ContextMenu({
-    x, y, nodeLocked,
-    onClose, onEdit, onDuplicate, onLogs, onLock, onDelete
+    x, y, nodeLocked, isRunning,
+    onClose, onEdit, onDuplicate, onLogs, onExec, onLock, onDelete
 }: ContextMenuProps) {
     const menuRef = useRef<HTMLDivElement>(null);
 
@@ -45,6 +47,7 @@ export function ContextMenu({
         { label: 'Edit Configuration', icon: Settings, action: onEdit, disabled: nodeLocked },
         { label: 'Duplicate', icon: Copy, action: onDuplicate, disabled: nodeLocked },
         { label: 'View Logs', icon: FileText, action: onLogs },
+        { label: 'Connect to Shell', icon: TerminalIcon, action: onExec, disabled: !isRunning, className: isRunning ? 'text-blue-500' : 'text-gray-400' },
         { label: nodeLocked ? 'Unlock Node' : 'Lock Node', icon: nodeLocked ? Unlock : Lock, action: onLock },
         { label: 'Delete', icon: Trash2, action: onDelete, className: 'text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20', disabled: nodeLocked },
     ];

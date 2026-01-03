@@ -55,6 +55,7 @@ services:
       - DB_NAME=${POSTGRES_DB:-devopscanvas}
       - REDIS_ADDR=redis:6379
       - JWT_SECRET=${JWT_SECRET:-supersecretkey}
+      - KIND_EXPERIMENTAL_DOCKER_NETWORK=devops-canvas-net
     volumes:
       # Mount docker socket to allow orchestrating sibling containers
       - /var/run/docker.sock:/var/run/docker.sock
@@ -79,7 +80,7 @@ services:
     environment:
       - VITE_API_URL=http://localhost:8080
     ports:
-      - "80:80"
+      - "3000:80"
     depends_on:
       - backend
     networks:
@@ -91,4 +92,5 @@ volumes:
 
 networks:
   canvas-network:
+    name: devops-canvas-net
     driver: bridge
