@@ -7,7 +7,6 @@ import (
     "os/exec"
     "path/filepath"
     "time"
-    "log"
 
     "helm.sh/helm/v3/pkg/action"
     "helm.sh/helm/v3/pkg/chart/loader"
@@ -204,7 +203,10 @@ func (s *Service) DeployKubernetes(ctx context.Context, workspaceID string, mani
 		settings.KubeConfig = internalKubeConfigPath
 		
 		actionConfig := new(action.Configuration)
-		if err := actionConfig.Init(settings.RESTClientGetter(), fmt.Sprintf("ws-%s", workspaceID), os.Getenv("HELM_DRIVER"), log.Printf); err != nil {
+		debugLog := func(format string, v ...interface{}) {
+			fmt.Printf("[HelmSDK] "+format+"\n", v...)
+		}
+		if err := actionConfig.Init(settings.RESTClientGetter(), fmt.Sprintf("ws-%s", workspaceID), os.Getenv("HELM_DRIVER"), debugLog); err != nil {
 			 return "", fmt.Errorf("failed to init helm config: %w", err)
 		}
 		
@@ -214,7 +216,13 @@ func (s *Service) DeployKubernetes(ctx context.Context, workspaceID string, mani
 			return "", fmt.Errorf("failed to load chart from dir: %w", err)
 		}
 		
-		releaseName := fmt.Sprintf("rel-%s", workspaceID)
+		// Truncate Release Name to avoid Label Length Errors (max 63 chars for labels)
+		// rel- (4) + 8 chars = 12 chars. Leaving ~50 chars for chart suffixes.
+		shortID := workspaceID
+		if len(workspaceID) > 8 {
+			shortID = workspaceID[:8]
+		}
+		releaseName := fmt.Sprintf("rel-%s", shortID)
 		
 		// Create Namespace manually using the internal kubeconfig
 		createNsCmd := exec.CommandContext(ctx, "kubectl", "create", "namespace", fmt.Sprintf("ws-%s", workspaceID))
@@ -224,19 +232,146 @@ func (s *Service) DeployKubernetes(ctx context.Context, workspaceID string, mani
 		// Create Upgrade Action
 		client := action.NewUpgrade(actionConfig)
 		client.Install = true
-		client.Namespace = fmt.Sprintf("ws-%s", workspaceID)
 		client.Wait = true
 		client.Timeout = 10 * time.Minute
+		client.CleanupOnFail = true // Ensure failed installs don't block future upgrades (avoids "no deployed releases" error)
 		
-		// Parse Values
-		vals, ok := manifests["helm_values"].(map[string]interface{})
-		if !ok {
-			vals = make(map[string]interface{})
-		}
 
-		// Run Upgrade
-		if _, err := client.Run(releaseName, chart, vals); err != nil {
-			 return "", fmt.Errorf("helm upgrade failed: %w", err)
+
+		// Run Upgrade with Self-Healing
+		// Note: We pass nil for values because we have already written them to values.yaml
+		// and loaded them via loader.LoadDir. Passing them again causes "type mismatch" errors
+		// in some Helm SDK versions when merging duplicate maps.
+		if _, err := client.Run(releaseName, chart, nil); err != nil {
+			// Check for common "stuck" states that require uninstalling first
+			errMsg := err.Error()
+			if strings.Contains(errMsg, "has no deployed releases") || strings.Contains(errMsg, "cannot re-use a name that is still in use") {
+				fmt.Printf("Helm upgrade failed with stuck state: %s. Attempting self-healing (uninstall & retry)...\n", errMsg)
+				s.broadcastStep(workspaceID, "provisioning", "in-progress", "Self-Healing Helm Release...", "")
+
+				// Attempt Uninstall
+				uninstallClient := action.NewUninstall(actionConfig)
+				uninstallClient.Wait = true
+				uninstallClient.Timeout = 5 * time.Minute
+				if _, err := uninstallClient.Run(releaseName); err != nil {
+					fmt.Printf("[Debug] Helm uninstall failed during healing (might be expected): %v\n", err)
+				} else {
+					fmt.Printf("[Debug] Helm uninstall successful.\n")
+				}
+
+				// Nuclear Option: Manually delete Helm secrets AND ConfigMaps to clear "ghost" releases
+				// Label selector might be unreliable, so we list and grep by name.
+				driver := os.Getenv("HELM_DRIVER")
+				if driver == "" { driver = "secret (default)" }
+				fmt.Printf("[Debug] Manually scrubbing Helm storage for %s (Driver: %s)...\n", releaseName, driver)
+				
+				// Cluster-Wide Search: Secrets and ConfigMaps in ALL namespaces
+				fmt.Printf("[Debug] Scanning CLUSTER-WIDE for ghost release...\n")
+				
+				// We search both Secrets and ConfigMaps simultaneously
+				listCmd := exec.CommandContext(ctx, "kubectl", "get", "secrets,configmaps",
+					"--all-namespaces",
+					"--no-headers",
+					"-o", "custom-columns=NS:.metadata.namespace,NAME:.metadata.name", // Output: "namespace resource-name"
+					"--kubeconfig", internalKubeConfigPath,
+				)
+				
+				if outBytes, err := listCmd.CombinedOutput(); err == nil {
+					outputStr := string(outBytes)
+					rows := strings.Split(outputStr, "\n")
+					deletedCount := 0
+					
+					for _, row := range rows {
+						// Row format: "namespacename resource-name" (whitespace separated)
+						parts := strings.Fields(row)
+						if len(parts) >= 2 {
+							ns := parts[0]
+							sName := parts[1]
+							
+							// Helm storage format: sh.helm.release.v1.<releaseName>.v<version>
+							// We check if the resource name contains our release name
+							if strings.Contains(sName, "sh.helm.release") && strings.Contains(sName, releaseName) {
+								fmt.Printf("[Debug] FOUND GHOST RELEASE in namespace '%s': %s\n", ns, sName)
+								
+								resourceTypes := []string{"secret", "configmap"}
+								for _, rType := range resourceTypes {
+									delCmd := exec.CommandContext(ctx, "kubectl", "delete", rType, sName,
+										"--namespace", ns,
+										"--kubeconfig", internalKubeConfigPath,
+										"--ignore-not-found",
+									)
+									if err := delCmd.Run(); err != nil {
+										fmt.Printf("[Debug] Failed to delete %s/%s in %s: %v\n", rType, sName, ns, err)
+									} else {
+										deletedCount++
+									}
+								}
+							}
+						}
+					}
+					if deletedCount > 0 {
+						fmt.Printf("[Debug] Cleanup actions performed on %d potential ghost resources.\n", deletedCount)
+					} else {
+                        fmt.Printf("[Debug] No matching ghost resources found cluster-wide.\n")
+                        // Debug: Print first 5 lines of output to verify layout
+                        if len(rows) > 0 {
+                             fmt.Printf("[Debug] Sample output: %s\n", rows[0])
+                        }
+                    }
+				} else {
+					fmt.Printf("[Debug] Failed to cluster-scan: %v, out: %s\n", err, string(outBytes))
+				}
+				
+				// Short wait for consistency
+				time.Sleep(2 * time.Second)
+
+				// DEBUG: Ask Helm what it sees
+				fmt.Printf("[Debug] Querying Helm Release List via SDK...\n")
+				listClient := action.NewList(actionConfig)
+				listClient.All = true
+				if releases, err := listClient.Run(); err == nil {
+					if len(releases) == 0 {
+						fmt.Printf("[Debug] Helm SDK sees 0 releases.\n")
+					} else {
+						for _, r := range releases {
+							fmt.Printf("[Debug] Helm SDK sees release: %s (Status: %s, Ver: %d)\n", r.Name, r.Info.Status, r.Version)
+						}
+					}
+				} else {
+					fmt.Printf("[Debug] Helm List failed: %v\n", err)
+				}
+
+				// Retry Strategy: Force Install
+				// If Upgrade failed claiming "no deployed releases", and we cleaned up, 
+				// we should try a fresh INSTALL instead of Upgrade.
+				fmt.Printf("Retrying Deployment (Switching to Install Action)...\n")
+				s.broadcastStep(workspaceID, "provisioning", "in-progress", "Retrying with Force Install...", "")
+				
+				// Re-init config to ensure clean state
+				newActionConfig := new(action.Configuration)
+				// Re-define debugLog locally if needed or reuse
+				if err := newActionConfig.Init(settings.RESTClientGetter(), fmt.Sprintf("ws-%s", workspaceID), os.Getenv("HELM_DRIVER"), debugLog); err != nil {
+					fmt.Printf("[Debug] Failed to re-init helm config: %v\n", err)
+				} else {
+					// Use the fresh config
+					installClient := action.NewInstall(newActionConfig)
+					installClient.ReleaseName = releaseName
+					installClient.Namespace = fmt.Sprintf("ws-%s", workspaceID)
+					installClient.Wait = true
+					installClient.Timeout = 10 * time.Minute
+					installClient.Replace = true // Similar to --replace, good for "already exists" conflicts
+					
+					// Use nil for values here too
+					if _, err := installClient.Run(chart, nil); err != nil {
+						fmt.Printf("[Debug] Helm Install Retry failed: %v\n", err)
+						return "", fmt.Errorf("helm retry (install) failed: %w", err)
+					}
+					fmt.Printf("[Debug] Helm Install Retry SUCCESS!\n")
+					return releaseName, nil
+				}
+			} else {
+				return "", fmt.Errorf("helm upgrade failed: %w", err)
+			}
 		}
 	} else {
 		s.broadcastStep(workspaceID, "provisioning", "completed", "Kind Cluster Details", "Skipping Helm deployment (no charts found). Cluster is ready.")

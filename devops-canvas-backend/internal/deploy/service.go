@@ -253,11 +253,30 @@ func (s *Service) DeployWorkspace(ctx context.Context, workspaceID string) (stri
 func (s *Service) TeardownWorkspace(ctx context.Context, workspaceID string) error {
     baseDir := fmt.Sprintf("/tmp/workspaces/%s", workspaceID)
     
-    // 1. Clean up Kind Cluster (Always try)
+    // 1. Clean up Kind Cluster
     // Cluster name convention: ws-{workspaceID}
     clusterName := fmt.Sprintf("ws-%s", workspaceID)
-    // We suppress output/error because if it doesn't exist, that's fine.
-    _ = exec.CommandContext(ctx, "kind", "delete", "cluster", "--name", clusterName).Run()
+
+    // Check if Kind is still part of the workspace configuration
+    // If it is, we should PRESERVE it during a Teardown (Stop/Cancel) operation
+    // to allow debugging and avoid data loss. It should only be deleted if removed from Canvas.
+    shouldDeleteKind := true
+    canvas, err := s.workspaceRepo.GetCanvas(ctx, workspaceID)
+    if err == nil {
+        for _, node := range canvas.Nodes {
+            if node.Type == "kind-cluster" {
+                shouldDeleteKind = false
+                break
+            }
+        }
+    }
+
+    if shouldDeleteKind {
+        // We suppress output/error because if it doesn't exist, that's fine.
+        _ = exec.CommandContext(ctx, "kind", "delete", "cluster", "--name", clusterName).Run()
+    } else {
+        fmt.Printf("Skipping Kind cluster deletion for %s (Kind node present in canvas)\n", clusterName)
+    }
 
     // 2. Clean up Docker Compose
     // Attempt standard down if file exists
