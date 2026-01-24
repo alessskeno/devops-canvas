@@ -75,8 +75,9 @@ func (t *RabbitMQTranslator) Translate(node models.Node, ctx TranslationContext)
 
     helm := make(HelmValues)
     helm["image"] = map[string]interface{}{
-        "tag": version,
+        "registry": "public.ecr.aws",
     }
+
     helm["auth"] = map[string]interface{}{
         "username": config.DefaultUser,
         "password": config.DefaultPass,

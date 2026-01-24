@@ -165,7 +165,7 @@ func (s *Service) DeployWorkspace(ctx context.Context, workspaceID string) (stri
 
     if isKind {
         s.broadcastStep(workspaceID, "provisioning", "in-progress", "Provisioning Kind Cluster", "")
-        status, err := s.DeployKubernetes(ctx, workspaceID, manifests, baseDir)
+        _, err := s.DeployKubernetes(ctx, workspaceID, manifests, baseDir)
         if err != nil {
              // If error was context canceled, the defer block will handle cleanup
              // If standard error, we return generic error
@@ -173,11 +173,9 @@ func (s *Service) DeployWorkspace(ctx context.Context, workspaceID string) (stri
                  return "", ctx.Err()
              }
              s.broadcastStep(workspaceID, "provisioning", "error", "Provisioning Failed", err.Error())
-             return status, err
+             return "", err
         }
         s.broadcastStep(workspaceID, "provisioning", "completed", "Provisioning Kind Cluster", "")
-        s.broadcastStep(workspaceID, "verified", "completed", "Cluster Healthy", "")
-        return status, nil
     } else {
         // If not deploying Kind, ensure any existing Kind cluster for this workspace is removed.
         // This handles cases where user switches from Kind -> Docker Compose or disables Kind.
@@ -251,11 +249,37 @@ func (s *Service) DeployWorkspace(ctx context.Context, workspaceID string) (stri
 }
 
 func (s *Service) TeardownWorkspace(ctx context.Context, workspaceID string) error {
-    baseDir := fmt.Sprintf("/tmp/workspaces/%s", workspaceID)
+	baseDir := fmt.Sprintf("/tmp/workspaces/%s", workspaceID)
     
-    // 1. Clean up Kind Cluster
     // Cluster name convention: ws-{workspaceID}
     clusterName := fmt.Sprintf("ws-%s", workspaceID)
+
+    // 0. Uninstall Helm Release (Best Effort)
+    // We attempt to uninstall the 'main' release to revert changes, even if we keep the cluster.
+    kindContext := fmt.Sprintf("kind-%s", clusterName)
+    releaseName := "main"
+    namespace := fmt.Sprintf("ws-%s", workspaceID)
+
+    // Only attempt if execution context allows (we don't strictly check for kind cluster existence first, 
+    // relying on helm to fail fast if context missing)
+    fmt.Printf("Teardown: Attempting to uninstall helm release '%s' from %s...\n", releaseName, kindContext)
+    
+    uninstallCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+    defer cancel()
+
+    uninstallCmd := exec.CommandContext(uninstallCtx, "helm", "uninstall", releaseName, 
+        "--namespace", namespace,
+        "--kube-context", kindContext,
+        "--wait",
+    )
+    if _, err := uninstallCmd.CombinedOutput(); err != nil {
+        // Expected if release doesn't exist or cluster is unreachable
+        fmt.Printf("Teardown debug: Helm uninstall skipped/failed: %v\n", err)
+    } else {
+        fmt.Printf("Teardown: Helm release '%s' uninstalled successfully.\n", releaseName)
+    }
+
+    // 1. Clean up Kind Cluster
 
     // Check if Kind is still part of the workspace configuration
     // If it is, we should PRESERVE it during a Teardown (Stop/Cancel) operation

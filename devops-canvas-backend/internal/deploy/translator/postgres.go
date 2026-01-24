@@ -157,8 +157,9 @@ func (t *PostgresTranslator) Translate(node models.Node, ctx TranslationContext)
     // Helm Values (Bitnami structure)
     helm := make(HelmValues)
     helm["image"] = map[string]interface{}{
-        "tag": version,
+        "registry": "public.ecr.aws",
     }
+
     helm["auth"] = map[string]interface{}{
         "username": user,
         "password": config.Password,

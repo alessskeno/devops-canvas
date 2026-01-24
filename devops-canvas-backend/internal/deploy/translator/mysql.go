@@ -96,8 +96,9 @@ func (t *MySQLTranslator) Translate(node models.Node, ctx TranslationContext) (*
     // Helm Values (Bitnami structure)
     helm := make(HelmValues)
     helm["image"] = map[string]interface{}{
-        "tag": version,
+        "registry": "public.ecr.aws",
     }
+
     helm["auth"] = map[string]interface{}{
         "rootPassword": config.RootPassword,
         "database":     config.DatabaseName,

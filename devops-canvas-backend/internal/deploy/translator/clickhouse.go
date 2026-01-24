@@ -81,8 +81,9 @@ func (t *ClickHouseTranslator) Translate(node models.Node, ctx TranslationContex
     
     helm := make(HelmValues)
     helm["image"] = map[string]interface{}{
-        "tag": version,
+        "registry": "public.ecr.aws",
     }
+
     
     // Resource Limits for Helm
     if config.Resources != nil {

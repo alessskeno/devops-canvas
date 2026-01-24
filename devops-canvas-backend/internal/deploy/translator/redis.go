@@ -89,8 +89,9 @@ func (t *RedisTranslator) Translate(node models.Node, ctx TranslationContext) (*
     // Helm Values (Bitnami structure)
     helm := make(HelmValues)
     helm["image"] = map[string]interface{}{
-        "tag": version,
+        "registry": "public.ecr.aws",
     }
+
     helm["auth"] = map[string]interface{}{
         "password": config.Password,
         "enabled":  config.Password != "",
@@ -103,6 +104,15 @@ func (t *RedisTranslator) Translate(node models.Node, ctx TranslationContext) (*
         },
         "persistence": map[string]interface{}{
             "enabled": true,
+        },
+    }
+
+    // Enable volume permissions init-container to fix permissions on dynamic volumes (e.g. Kind)
+    helm["volumePermissions"] = map[string]interface{}{
+        "enabled": true,
+        "image": map[string]interface{}{
+            "tag": "latest",
+            "pullPolicy": "IfNotPresent",
         },
     }
     

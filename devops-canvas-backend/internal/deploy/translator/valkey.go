@@ -88,8 +88,9 @@ func (t *ValkeyTranslator) Translate(node models.Node, ctx TranslationContext) (
     // Helm Values (Reuse Redis or Generic)
     helm := make(HelmValues)
     helm["image"] = map[string]interface{}{
-        "tag": version,
+        "registry": "public.ecr.aws",
     }
+
     helm["auth"] = map[string]interface{}{
         "enabled":  config.Password != "",
         "password": config.Password,

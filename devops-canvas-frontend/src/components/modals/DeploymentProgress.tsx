@@ -49,9 +49,9 @@ export function DeploymentProgress({ isOpen, onClose, onCancel, logs, steps }: D
                     </div>
                 </div>
 
-                <div className="flex flex-col md:flex-row gap-6">
+                <div className="flex flex-col gap-6">
                     {/* Steps */}
-                    <div className="flex-1 space-y-4">
+                    <div className="w-full space-y-4">
                         {steps.map((step, idx) => (
                             <div key={idx} className={`p-2 rounded-lg ${step.status === 'error' ? 'bg-red-50 dark:bg-red-900/10' : 'hover:bg-gray-50 dark:hover:bg-slate-800'}`}>
                                 <div className="flex items-center space-x-3">
@@ -91,15 +91,6 @@ export function DeploymentProgress({ isOpen, onClose, onCancel, logs, steps }: D
                                 )}
                             </div>
                         )}
-                    </div>
-
-                    {/* Logs */}
-                    <div className="flex-1">
-                        <div className="bg-gray-900 rounded-lg p-3 h-48 overflow-y-auto font-mono text-[10px] text-gray-300 flex flex-col-reverse">
-                            <div className="flex flex-col">
-                                {logs.map((log, i) => <div key={i} className="border-l-2 border-transparent pl-1 hover:border-gray-700 break-all">{log}</div>)}
-                            </div>
-                        </div>
                     </div>
                 </div>
 

@@ -67,7 +67,8 @@ func (m *DockerMonitor) collectAndBroadcast() {
     // Mapping approach
     nameToProject, err := m.getContainerProjectMapping()
     if err != nil {
-        return 
+        // Fallback or just continue, but map might be empty
+        nameToProject = make(map[string]string)
     }
     
     for _, line := range lines {
@@ -75,10 +76,29 @@ func (m *DockerMonitor) collectAndBroadcast() {
          var stat ContainerStat
          if err := json.Unmarshal([]byte(line), &stat); err != nil { continue }
          
+         // 1. Check Docker Compose Project Label
          project, ok := nameToProject[stat.Name]
          if ok && project != "" {
              workspaceMap[project] = append(workspaceMap[project], stat)
              currentWorkspaces[project] = true
+         }
+
+         // 2. Check for Kind Clusters (Naming Convention: ws-{id}-control-plane)
+         if strings.HasPrefix(stat.Name, "ws-") && strings.HasSuffix(stat.Name, "-control-plane") {
+             // Extract ID: ws-UUID-control-plane
+             parts := strings.Split(stat.Name, "-")
+             if len(parts) >= 2 {
+                 // Assumptions: ws-UUID-control-plane. UUID might contain dashes.
+                 // Safer: TrimPrefix "ws-" and TrimSuffix "-control-plane"
+                 wsID := strings.TrimSuffix(strings.TrimPrefix(stat.Name, "ws-"), "-control-plane")
+                 
+                 // Add the control plane itself
+                 workspaceMap[wsID] = append(workspaceMap[wsID], stat)
+                 currentWorkspaces[wsID] = true
+                 
+                 // Fetch Pods from inside the cluster
+                 m.appendKindPods(stat.Name, wsID, workspaceMap)
+             }
          }
     }
     
@@ -124,6 +144,42 @@ func (m *DockerMonitor) collectAndBroadcast() {
             // Remove from known
             delete(m.lastKnownWorkspaces, wsID)
         }
+    }
+}
+
+// appendKindPods runs kubectl inside the kind node and adds pods as virtual container stats
+func (m *DockerMonitor) appendKindPods(kindContainerName string, wsID string, workspaceMap map[string][]ContainerStat) {
+    // We use 'docker exec' to run kubectl inside the control plane.
+    // This avoids needing local kubectl or kubeconfig paths in this context.
+    // Cmd: kubectl get pods --all-namespaces --field-selector=status.phase=Running --no-headers -o custom-columns=NAME:.metadata.name
+    
+    cmd := exec.Command("docker", "exec", kindContainerName, "kubectl", "get", "pods", 
+        "--all-namespaces", 
+        "--field-selector=status.phase=Running", 
+        "--no-headers", 
+        "-o", "custom-columns=NAME:.metadata.name")
+        
+    output, err := cmd.Output()
+    if err != nil {
+        // Cluster might be starting up or unready
+        return
+    }
+    
+    podLines := strings.Split(string(output), "\n")
+    for _, podName := range podLines {
+        podName = strings.TrimSpace(podName)
+        if podName == "" { continue }
+        
+        // Create a virtual stat for the pod
+        // We set CPU/Mem to 0 or "N/A" since calculating them per pod from outside is hard without metrics-server
+        workspaceMap[wsID] = append(workspaceMap[wsID], ContainerStat{
+            Name:     podName, // Frontend will match this against expected "type-shortID"
+            CPUPerc:  "0%",
+            MemUsage: "0B / 0B",
+            NetIO:    "0B / 0B",
+            BlockIO:  "0B / 0B",
+            PIDs:     "1",
+        })
     }
 }
 
