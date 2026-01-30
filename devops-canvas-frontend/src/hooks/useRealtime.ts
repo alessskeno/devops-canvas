@@ -36,6 +36,8 @@ export const useRealtime = (workspaceId?: string) => {
     const [systemStats, setSystemStats] = useState<SystemStats | null>(null);
     const [workspaceStats, setWorkspaceStats] = useState<WorkspaceStats | null>(null);
     const [lastMessage, setLastMessage] = useState<any>(null);
+    const [canvasUpdate, setCanvasUpdate] = useState<any>(null);
+    const [activeCursors, setActiveCursors] = useState<{ [key: string]: { x: number, y: number, name: string, lastActive: number } }>({});
 
     useEffect(() => {
         if (!user || !workspaceId) return;
@@ -68,6 +70,24 @@ export const useRealtime = (workspaceId?: string) => {
                         if (data.workspace_id === workspaceId) {
                             setWorkspaceStats(data);
                         }
+                    } else if (data.type === 'canvas_update') {
+                        // Only update if it's for this workspace and NOT from us
+                        if (data.workspace_id === workspaceId) {
+                            setCanvasUpdate(data);
+                        }
+                    } else if (data.type === 'cursor_move') {
+                        // Handle peer cursor moves
+                        if (data.workspace_id === workspaceId && data.sender_id !== user.id) {
+                            setActiveCursors(prev => ({
+                                ...prev,
+                                [data.sender_id]: {
+                                    x: data.x,
+                                    y: data.y,
+                                    name: data.sender_name || 'Anonymous', // Assuming backend or sender provides this
+                                    lastActive: Date.now()
+                                }
+                            }));
+                        }
                     }
 
                 } catch (err) {
@@ -78,7 +98,24 @@ export const useRealtime = (workspaceId?: string) => {
 
         connect();
 
+        // Cleanup inactive cursors every 1s
+        const cleanupInterval = setInterval(() => {
+            const now = Date.now();
+            setActiveCursors(prev => {
+                const next = { ...prev };
+                let changed = false;
+                Object.keys(next).forEach(key => {
+                    if (now - next[key].lastActive > 5000) { // 5s timeout
+                        delete next[key];
+                        changed = true;
+                    }
+                });
+                return changed ? next : prev;
+            });
+        }, 1000);
+
         return () => {
+            clearInterval(cleanupInterval);
             if (ws.current) {
                 ws.current.onclose = null;
                 ws.current.close();
@@ -93,5 +130,28 @@ export const useRealtime = (workspaceId?: string) => {
         }
     };
 
-    return { isConnected, systemStats, workspaceStats, sendMessage, lastMessage };
+    const sendCanvasUpdate = (type: string, payload: any) => {
+        sendMessage({
+            type: 'canvas_update',
+            workspace_id: workspaceId,
+            action: type,
+            payload: payload,
+            sender_id: user?.id, // Helps filtering echo
+            timestamp: Date.now()
+        });
+    };
+
+    const sendCursorMove = (x: number, y: number) => {
+        sendMessage({
+            type: 'cursor_move',
+            workspace_id: workspaceId,
+            sender_id: user?.id,
+            sender_name: user?.email.split('@')[0], // Simple name extraction
+            x,
+            y,
+            timestamp: Date.now()
+        });
+    };
+
+    return { isConnected, systemStats, workspaceStats, sendMessage, lastMessage, canvasUpdate, sendCanvasUpdate, activeCursors, sendCursorMove };
 };

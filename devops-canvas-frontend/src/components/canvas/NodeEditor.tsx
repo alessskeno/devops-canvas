@@ -13,6 +13,7 @@ import {
 import { Button } from '../shared/Button';
 import { useCanvasStore } from '../../store/canvasStore';
 import { useWorkspaceStore } from '../../store/workspaceStore';
+import { useAuthStore } from '../../store/authStore';
 import toast from 'react-hot-toast';
 import { useDarkMode } from '../../hooks/useDarkMode';
 import { ExportModal } from '../modals/ExportModal';
@@ -21,6 +22,7 @@ import { StatusBar } from '../layout/StatusBar';
 import { DeploymentProgress } from '../modals/DeploymentProgress';
 import { TerminalModal } from '../modals/TerminalModal';
 import { getComponentByType } from '../../utils/componentRegistry';
+import { CursorOverlay } from './CursorOverlay';
 
 interface DeploymentStep {
     label: string;
@@ -41,8 +43,16 @@ export function NodeEditor() {
         selectedNodeId, duplicateNode, removeNode
     } = useCanvasStore();
 
-    const { isConnected, systemStats, workspaceStats, lastMessage } = useRealtime(workspaceId);
-
+    const {
+        isConnected,
+        systemStats,
+        workspaceStats,
+        lastMessage,
+        canvasUpdate,
+        sendCanvasUpdate,
+        activeCursors,
+        sendCursorMove
+    } = useRealtime(workspaceId); const { user } = useAuthStore(); // Need user to filter echo
     const { fetchWorkspace, currentWorkspace } = useWorkspaceStore();
 
     const [sidebarVisible, setSidebarVisible] = useState(() => localStorage.getItem('canvas_sidebar') !== 'false');
@@ -185,15 +195,73 @@ export function NodeEditor() {
         }
     }, [workspaceId, fetchCanvas, fetchWorkspace]);
 
-    // ... existing code ...
+    // Sync State
+    const isRemoteUpdate = useRef(false);
+    const sendUpdateTimeout = useRef<NodeJS.Timeout | null>(null);
 
-    // Header JSX replacement
-    /* 
-       Locating the header div around line 321-327.
-       We will replace lines 321-327 with dynamic content.
-    */
+    // 1. Receive Updates
+    useEffect(() => {
+        if (!canvasUpdate) return;
 
+        // Filter Echo
+        if (user && canvasUpdate.sender_id === user.id) return;
 
+        // Apply Update
+        // payload should have { n: nodes, c: connections } matching our serialization
+        const { n, c } = canvasUpdate.payload;
+
+        if (n && c) {
+            isRemoteUpdate.current = true;
+            loadCanvas(n, c);
+
+            // Treat remote updates as "Saved" state to avoid "Unsaved Changes" warning
+            // when we are just viewing what others are doing.
+            // Also prevents overriding the remote change with an "autosave" of the old state.
+            savedStateRef.current = JSON.stringify({ n, c });
+            setHasUnsavedChanges(false);
+
+            // Reset flag after a tick to allow local interaction again
+            // We use a small timeout because loadCanvas triggers state updates which trigger the "Send" effect
+            setTimeout(() => {
+                isRemoteUpdate.current = false;
+            }, 100);
+        }
+
+    }, [canvasUpdate, loadCanvas, user]);
+
+    // 2. Send Updates (Track Changes)
+    useEffect(() => {
+        // If we haven't initialized the saved state yet (loading), ignore changes
+        if (savedStateRef.current === null) {
+            return;
+        }
+
+        const currentSerialized = serializeState(nodes, connections);
+
+        // Check if meaningful change happened
+        if (currentSerialized !== savedStateRef.current) {
+            setHasUnsavedChanges(true);
+
+            // Emit Realtime Update
+            // We debounce this to avoid flooding WS on drag
+            if (!isRemoteUpdate.current) {
+                if (sendUpdateTimeout.current) clearTimeout(sendUpdateTimeout.current);
+
+                sendUpdateTimeout.current = setTimeout(() => {
+                    // Re-clean nodes for transmission (remove ephemeral)
+                    // serializeState returns a string, we want the object
+                    const payload = {
+                        n: nodes.map(({ selected, ...rest }) => rest),
+                        c: connections
+                    };
+
+                    sendCanvasUpdate('sync', payload);
+                }, 50); // 50ms debounce = ~20fps max
+            }
+        } else {
+            setHasUnsavedChanges(false);
+        }
+    }, [nodes, connections, sendCanvasUpdate]); // Dependencies trigger on every move
     // Calculate Running Nodes based on Realtime Stats
     const runningNodeIds = useMemo(() => {
         const running = new Set<string>();
@@ -258,21 +326,6 @@ export function NodeEditor() {
             toast.error(msg);
         }
     };
-
-    // Track Changes
-    useEffect(() => {
-        // If we haven't initialized the saved state yet (loading), ignore changes
-        if (savedStateRef.current === null) {
-            return;
-        }
-
-        const current = serializeState(nodes, connections);
-        if (current !== savedStateRef.current) {
-            setHasUnsavedChanges(true);
-        } else {
-            setHasUnsavedChanges(false);
-        }
-    }, [nodes, connections]);
 
     // Auto-Save Scheduler
     useEffect(() => {
@@ -626,6 +679,7 @@ export function NodeEditor() {
         reader.readAsText(file);
     };
 
+
     return (
         <div className="h-screen flex flex-col bg-slate-50 dark:bg-slate-900 overflow-hidden">
             {/* Top Bar - Single Row as requested */}
@@ -763,12 +817,19 @@ export function NodeEditor() {
             </div>
 
             <div className="flex-1 flex overflow-hidden">
-                <div className="flex-1 flex overflow-hidden relative">
+                <div
+                    className="flex-1 flex overflow-hidden relative"
+                >
                     <div className={`transition-all duration-300 ease-in-out border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden ${sidebarVisible ? 'w-72 opacity-100' : 'w-0 opacity-0 border-r-0'}`}>
                         <ComponentLibrary />
                     </div>
 
-                    <CanvasArea runningNodeIds={runningNodeIds} onNodeExec={handleNodeExec} />
+                    <CanvasArea
+                        runningNodeIds={runningNodeIds}
+                        onNodeExec={handleNodeExec}
+                        activeCursors={activeCursors}
+                        sendCursorMove={sendCursorMove}
+                    />
 
                     <div className={`transition-all duration-300 ease-in-out border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden absolute right-0 top-0 bottom-0 z-10 shadow-xl ${useCanvasStore(s => s.selectedNodeId) ? 'w-80 translate-x-0' : 'w-0 translate-x-full'}`}>
                         <ConfigPanel />

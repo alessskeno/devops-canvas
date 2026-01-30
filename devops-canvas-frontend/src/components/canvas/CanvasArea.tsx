@@ -2,19 +2,23 @@ import React, { useRef, useState, useEffect } from 'react';
 import { useCanvasStore } from '../../store/canvasStore';
 import { CanvasNode } from './CanvasNode';
 import { ConnectionLine } from './ConnectionLine';
-import { useDrop } from '../../utils/dragDrop'; // Placeholder for hook
+import { useDrop } from '../../utils/dragDrop';
 import { CanvasNode as NodeType } from '../../types';
 import { ContextMenu } from './ContextMenu';
 import { COMPONENT_CONFIG_SCHEMAS } from '../../utils/componentConfigSchemas';
+import { CursorOverlay } from './CursorOverlay';
 
 interface CanvasAreaProps {
     runningNodeIds?: Set<string>;
     onNodeExec?: (nodeId: string) => void;
+    activeCursors: { [key: string]: { x: number, y: number, name: string } };
+    sendCursorMove: (x: number, y: number) => void;
 }
 
-export function CanvasArea({ runningNodeIds, onNodeExec }: CanvasAreaProps) {
+export function CanvasArea({ runningNodeIds, onNodeExec, activeCursors, sendCursorMove }: CanvasAreaProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const mouseRef = useRef({ x: 0, y: 0 });
+    const lastCursorSend = useRef(0);
 
     const {
         nodes, connections, scale, pan,
@@ -39,15 +43,6 @@ export function CanvasArea({ runningNodeIds, onNodeExec }: CanvasAreaProps) {
             setTempMousePos(mouseRef.current);
         }
     }, [draftConnection]);
-
-    // Handle Pan and Zoom
-    const handleDetachConnection = (connectionId: string, sourceId: string, sourcePos: { x: number, y: number }) => {
-        removeConnection(connectionId);
-        setDraftConnection({
-            sourceId: sourceId,
-            sourcePos
-        });
-    };
 
     const handleWheel = (e: WheelEvent) => {
         e.preventDefault();
@@ -104,6 +99,13 @@ export function CanvasArea({ runningNodeIds, onNodeExec }: CanvasAreaProps) {
             if (draftConnection) {
                 setTempMousePos({ x: canvasX, y: canvasY });
             }
+
+            // Send Cursor Move (Throttled)
+            const now = Date.now();
+            if (now - lastCursorSend.current > 50) {
+                sendCursorMove(canvasX, canvasY);
+                lastCursorSend.current = now;
+            }
         }
 
         if (isPanning) {
@@ -117,10 +119,6 @@ export function CanvasArea({ runningNodeIds, onNodeExec }: CanvasAreaProps) {
     const handleMouseUp = (e: React.MouseEvent) => {
         setIsPanning(false);
         if (draftConnection) {
-            // Check if dropped on a valid target port
-            // The target port should handle the mouseup event and creating the connection
-            // checks. Here we just clear the draft if it wasn't handled.
-            // We defer clearing slightly to allow the port's onMouseUp to fire first
             setTimeout(() => {
                 setDraftConnection(null);
             }, 50);
@@ -168,13 +166,6 @@ export function CanvasArea({ runningNodeIds, onNodeExec }: CanvasAreaProps) {
         }
     };
 
-    // Handle Connections Logic
-    // This usually requires detecting if we are over a port. 
-    // For simplicity, we'll assume clicks on ports initiate/end connections in the Node component
-    // But actually the Node Ports are DOM elements. We can listen to clicks on them.
-    // A robust implementation would use a specialized library or context. 
-    // Here we'll just handle the visual temp line.
-
     // Use useEffect for non-passive wheel listener
     useEffect(() => {
         const element = containerRef.current;
@@ -198,6 +189,10 @@ export function CanvasArea({ runningNodeIds, onNodeExec }: CanvasAreaProps) {
             onDragOver={handleDragOver}
             onDrop={handleDrop}
         >
+            {/* Cursor Overlay */}
+            <CursorOverlay cursors={activeCursors} scale={scale} pan={pan} />
+
+            {/* Transform Container - everything inside here scales/pans */}
             <div
                 className="absolute origin-top-left transition-transform duration-75 ease-out"
                 style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})` }}
@@ -209,20 +204,11 @@ export function CanvasArea({ runningNodeIds, onNodeExec }: CanvasAreaProps) {
                         const toNode = nodes.find(n => n.id === activeConn.target);
                         if (!fromNode || !toNode) return null;
 
-                        // Calculate handle positions 
-                        // Right handle for source (x + width, y + height/2)
-                        // Left handle for target (x, y + height/2)
-                        // Node width is w-64 (256px), header+body makes height variable but let's estimate or measure
-                        // For now using fixed offsets based on typical node size. 
-                        // Ideally we should use refs or measured handle positions.
-                        // Assuming separator line is at ~50px height.
                         const x1 = fromNode.position.x + 256;
-                        const y1 = fromNode.position.y + 53; // Approx separator height
+                        const y1 = fromNode.position.y + 53;
                         const x2 = toNode.position.x;
                         const y2 = toNode.position.y + 53;
 
-                        // Determine if connection should be animated
-                        // Both source and target must be running
                         const isRunning = runningNodeIds?.has(fromNode.id) && runningNodeIds?.has(toNode.id);
                         const isAnimated = activeConn.animated || isRunning;
 
@@ -276,7 +262,7 @@ export function CanvasArea({ runningNodeIds, onNodeExec }: CanvasAreaProps) {
                         onEdit={() => {
                             if (node) {
                                 selectNode(node.id);
-                                setActivePanelTab('General'); // Explicitly switch to General
+                                setActivePanelTab('General');
                             }
                         }}
                         onDuplicate={() => duplicateNode(contextMenu.nodeId)}
@@ -294,7 +280,6 @@ export function CanvasArea({ runningNodeIds, onNodeExec }: CanvasAreaProps) {
                 );
             })()}
 
-            {/* Controls / Info overlay could go here */}
             <div className="absolute bottom-4 right-4 bg-white dark:bg-gray-800 p-2 rounded-lg shadow text-xs text-gray-500 font-mono">
                 Scale: {(scale * 100).toFixed(0)}% | Pan: {pan.x.toFixed(0)}, {pan.y.toFixed(0)}
             </div>
