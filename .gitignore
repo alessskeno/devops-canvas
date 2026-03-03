@@ -40,3 +40,5 @@ devops-canvas-backend/main
 .idea
 .vscode
 *.swp
+devops-canvas-backend/api
+devops-canvas-backend/saas-bin

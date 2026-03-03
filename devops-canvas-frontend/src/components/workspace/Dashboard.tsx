@@ -1,9 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
+import { dashboardReducer, initialState, type DashboardState, type DashboardAction } from './dashboardReducer';
 import { useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useWorkspaceStore } from '../../store/workspaceStore';
 import { useAuthStore } from '../../store/authStore';
 import { WorkspaceCard } from './WorkspaceCard';
+import { config } from '../../config';
 import { Button } from '../shared/Button';
 import { Plus, Search, Sun, Moon, LogOut, User as UserIcon } from 'lucide-react';
 import { Input } from '../shared/Input';
@@ -19,13 +21,10 @@ export function Dashboard() {
     const { user, logout } = useAuthStore();
     const { workspaces, fetchWorkspaces, createWorkspace, updateWorkspace, duplicateWorkspace, deleteWorkspace, isLoading } = useWorkspaceStore();
     const { isDark, toggle } = useDarkMode();
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
-    const [editingWorkspace, setEditingWorkspace] = useState<Workspace | undefined>(undefined);
-    const [workspaceToDelete, setWorkspaceToDelete] = useState<Workspace | null>(null);
 
-    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-    const [searchTerm, setSearchTerm] = useState('');
+    // Converted to useReducer
+    const [state, dispatch] = React.useReducer(dashboardReducer, initialState);
+
     const dropdownRef = React.useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -34,14 +33,14 @@ export function Dashboard() {
 
     const handleModalSubmit = async (data: any) => {
         try {
-            if (modalMode === 'create') {
+            if (state.modalMode === 'create') {
                 await createWorkspace(data);
                 toast.success('Workspace created successfully');
-            } else if (modalMode === 'edit' && editingWorkspace) {
-                await updateWorkspace(editingWorkspace.id, data);
+            } else if (state.modalMode === 'edit' && state.editingWorkspace) {
+                await updateWorkspace(state.editingWorkspace.id, data);
                 toast.success('Workspace updated successfully');
             }
-            setIsModalOpen(false);
+            dispatch({ type: 'CLOSE_MODAL' });
         } catch (error: any) {
             const msg = error.response?.data?.error || error.message || 'Operation failed';
             toast.error(msg);
@@ -49,23 +48,19 @@ export function Dashboard() {
     };
 
     const openCreateModal = () => {
-        setModalMode('create');
-        setEditingWorkspace(undefined);
-        setIsModalOpen(true);
+        dispatch({ type: 'OPEN_CREATE_MODAL' });
     };
 
     const openEditModal = (ws: Workspace) => {
-        setModalMode('edit');
-        setEditingWorkspace(ws);
-        setIsModalOpen(true);
+        dispatch({ type: 'OPEN_EDIT_MODAL', workspace: ws });
     };
 
     const confirmDelete = async () => {
-        if (!workspaceToDelete) return;
+        if (!state.workspaceToDelete) return;
         try {
-            await deleteWorkspace(workspaceToDelete.id);
+            await deleteWorkspace(state.workspaceToDelete.id);
             toast.success('Workspace deleted');
-            setWorkspaceToDelete(null);
+            dispatch({ type: 'SET_WORKSPACE_TO_DELETE', workspace: null });
         } catch (error: any) {
             const msg = error.response?.data?.error || error.message || 'Deletion failed';
             toast.error(msg);
@@ -90,8 +85,8 @@ export function Dashboard() {
                             type="text"
                             placeholder="Search workspaces..."
                             className="w-full bg-slate-200 dark:bg-slate-800 border-none rounded-lg py-2 pl-10 pr-4 text-sm focus:ring-2 focus:ring-blue-500 dark:text-white"
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
+                            value={state.searchTerm}
+                            onChange={(e) => dispatch({ type: 'SET_SEARCH_TERM', term: e.target.value })}
                         />
                     </div>
                 </div>
@@ -105,9 +100,9 @@ export function Dashboard() {
 
                     <div className="relative z-20" ref={dropdownRef}>
                         <button
-                            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                            onClick={() => dispatch({ type: 'TOGGLE_DROPDOWN' })}
                             className={`flex items-center space-x-2 py-1 px-2 rounded-full border transition-all duration-200 focus:outline-none 
-                                ${isDropdownOpen ? 'bg-slate-100 dark:bg-slate-800/50 border-slate-300 dark:border-slate-700' : 'border-transparent hover:bg-slate-100 hover:border-slate-300 dark:hover:bg-slate-800'}
+                                ${state.isDropdownOpen ? 'bg-slate-100 dark:bg-slate-800/50 border-slate-300 dark:border-slate-700' : 'border-transparent hover:bg-slate-100 hover:border-slate-300 dark:hover:bg-slate-800'}
                             `}
                         >
                             <div className="h-8 w-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-medium shadow-sm">
@@ -116,7 +111,7 @@ export function Dashboard() {
                             <div className="hidden sm:block text-left mr-1">
                                 <p className="text-sm font-semibold text-slate-800 dark:text-slate-300 flex items-center">
                                     {user?.name || 'Jane Doe'}
-                                    <svg className={`ml-2 h-4 w-4 text-slate-500 transition-transform duration-200 ${isDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <svg className={`ml-2 h-4 w-4 text-slate-500 transition-transform duration-200 ${state.isDropdownOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                                     </svg>
                                 </p>
@@ -124,7 +119,7 @@ export function Dashboard() {
                         </button>
 
                         {/* Dropdown Menu */}
-                        {isDropdownOpen && (
+                        {state.isDropdownOpen && (
                             <div className="absolute right-0 top-full mt-2 w-56 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 py-2 transform transition-all duration-200 origin-top-right">
                                 <div className="px-4 py-2 border-b border-slate-200 dark:border-slate-800 mb-1">
                                     <p className="text-sm font-medium text-slate-950 dark:text-white">{user?.name || 'Jane Doe'}</p>
@@ -141,12 +136,14 @@ export function Dashboard() {
                                     </svg>
                                     Team Management
                                 </Link>
-                                <a href="#" className="flex items-center px-4 py-2.5 text-sm text-slate-800 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors">
-                                    <svg className="mr-3 h-4 w-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                                    </svg>
-                                    Billing
-                                </a>
+                                {config.isSaaS && (
+                                    <Link to="/billing" className="flex items-center px-4 py-2.5 text-sm text-slate-800 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors">
+                                        <svg className="mr-3 h-4 w-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                                        </svg>
+                                        Billing
+                                    </Link>
+                                )}
 
                                 <div className="my-1 border-t border-slate-200 dark:border-slate-800"></div>
 
@@ -178,12 +175,12 @@ export function Dashboard() {
                 {/* Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                     {isLoading ? (
-                        [...Array(4)].map((_, i) => (
-                            <div key={i} className="h-48 bg-slate-300 dark:bg-slate-900 rounded-xl animate-pulse"></div>
+                        ['skeleton-1', 'skeleton-2', 'skeleton-3', 'skeleton-4'].map((id) => (
+                            <div key={id} className="h-48 bg-slate-300 dark:bg-slate-900 rounded-xl animate-pulse"></div>
                         ))
                     ) : (
                         workspaces
-                            .filter(ws => ws.name.toLowerCase().includes(searchTerm.toLowerCase()))
+                            .filter(ws => ws.name.toLowerCase().includes(state.searchTerm.toLowerCase()))
                             .map((ws) => (
                                 <WorkspaceCard
                                     key={ws.id}
@@ -200,9 +197,9 @@ export function Dashboard() {
                                         }
                                     }}
                                     onDelete={async () => {
-                                        setWorkspaceToDelete(ws);
+                                        dispatch({ type: 'SET_WORKSPACE_TO_DELETE', workspace: ws });
                                     }}
-                                    highlight={searchTerm}
+                                    highlight={state.searchTerm}
                                 />
                             ))
                     )}
@@ -210,30 +207,32 @@ export function Dashboard() {
             </main>
 
             {/* Workspace Modal (Create/Edit) */}
-            <WorkspaceModal
-                isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
-                onSubmit={handleModalSubmit}
-                initialData={editingWorkspace}
-                mode={modalMode}
-            />
+            {state.isModalOpen && (
+                <WorkspaceModal
+                    isOpen={state.isModalOpen}
+                    onClose={() => dispatch({ type: 'CLOSE_MODAL' })}
+                    onSubmit={handleModalSubmit}
+                    initialData={state.editingWorkspace}
+                    mode={state.modalMode}
+                />
+            )}
 
             {/* Delete Confirmation Modal */}
             <Modal
-                isOpen={!!workspaceToDelete}
-                onClose={() => setWorkspaceToDelete(null)}
+                isOpen={!!state.workspaceToDelete}
+                onClose={() => dispatch({ type: 'SET_WORKSPACE_TO_DELETE', workspace: null })}
                 title="Delete Workspace"
                 size="sm"
             >
                 <div className="flex flex-col gap-4">
                     <p className="text-sm text-slate-600 dark:text-slate-400">
-                        Are you sure you want to delete <span className="font-bold text-slate-900 dark:text-white">{workspaceToDelete?.name}</span>? This action cannot be undone.
+                        Are you sure you want to delete <span className="font-bold text-slate-900 dark:text-white">{state.workspaceToDelete?.name}</span>? This action cannot be undone.
                     </p>
                     <div className="bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-200 p-3 rounded-md text-xs border border-amber-200 dark:border-amber-800/30">
                         <strong>Warning:</strong> Deleting this workspace will immediately terminate all running components and clusters (Kind/Docker) associated with it.
                     </div>
                     <div className="flex justify-end gap-3 mt-2">
-                        <Button variant="secondary" onClick={() => setWorkspaceToDelete(null)}>Cancel</Button>
+                        <Button variant="secondary" onClick={() => dispatch({ type: 'SET_WORKSPACE_TO_DELETE', workspace: null })}>Cancel</Button>
                         <Button variant="danger" onClick={confirmDelete}>Delete</Button>
                     </div>
                 </div>

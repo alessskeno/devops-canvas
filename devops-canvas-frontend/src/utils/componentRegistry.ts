@@ -111,6 +111,22 @@ export const COMPONENT_REGISTRY: ComponentDefinition[] = [
         color: 'text-purple-600 bg-purple-100 dark:text-purple-400 dark:bg-purple-900/30',
         defaultConfig: { label: 'Monitoring Stack' }
     },
+    // Custom
+    {
+        type: 'custom-container',
+        name: 'Custom Container',
+        description: 'Build & run your own Dockerfile',
+        icon: 'Code',
+        category: 'custom',
+        color: 'text-emerald-600 bg-emerald-100 dark:text-emerald-400 dark:bg-emerald-900/30',
+        defaultConfig: {
+            label: 'My App',
+            buildContextId: '',
+            containerPort: 8080,
+            hostPort: 8080,
+            envVars: ''
+        }
+    },
     // Configuration
     {
         type: 'file',

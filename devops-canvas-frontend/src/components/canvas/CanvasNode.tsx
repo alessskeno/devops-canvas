@@ -1,11 +1,12 @@
 import React, { useRef } from 'react';
 import { CanvasNode as NodeData } from '../../types';
-import { Database, Server, Box, Layers, Activity, HardDrive, BarChart2, X, Lock, FileText, Bell, Boxes, Container } from 'lucide-react';
+import { Database, Server, Box, Layers, Activity, HardDrive, BarChart2, FileText, Bell, Boxes, Container, Code } from 'lucide-react';
 import { useCanvasStore } from '../../store/canvasStore';
 import { getComponentByType } from '../../utils/componentRegistry';
-import { isFieldSensitive } from '../../utils/security';
 import { validateConnection } from '../../utils/validation';
 import toast from 'react-hot-toast';
+import { CanvasNodeHeader } from './CanvasNodeHeader';
+import { CanvasNodeBody } from './CanvasNodeBody';
 
 interface CanvasNodeProps {
     node: NodeData;
@@ -25,7 +26,8 @@ const IconMap: Record<string, any> = {
     'HardDrive': HardDrive,
     'BarChart': BarChart2,
     'Bell': Bell,
-    'FileText': FileText
+    'FileText': FileText,
+    'Code': Code
 };
 
 function CanvasNodeComponent({ node, scale, isSelected }: CanvasNodeProps) {
@@ -171,145 +173,30 @@ function CanvasNodeComponent({ node, scale, isSelected }: CanvasNodeProps) {
                 zIndex: node.selected ? 10 : 1,
             }}
             className={`
-                canvas-node group w-80 bg-white dark:bg-slate-900 rounded-xl shadow-sm border-2 group transition-[box-shadow,border-color,background-color] duration-200 z-10 cursor-pointer select-none
+                canvas-node group w-80 bg-white dark:bg-slate-900 rounded-xl shadow-sm border-2 group transition-[box-shadow,border-color,background-color] duration-200 z-10 cursor-pointer select-none outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900
                 ${(isSelected || node.selected)
                     ? 'border-blue-500 ring-2 ring-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.4)]'
                     : 'border-gray-200 dark:border-slate-800 hover:border-blue-300 dark:hover:border-blue-500 hover:shadow-md'
                 }
             `}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    if (!isSelected) selectNode(node.id);
+                }
+            }}
         >
-            {/* Header */}
-            <div className="p-3 flex items-center gap-3 border-b border-gray-100 dark:border-slate-800 relative">
-                <div className={`
-                    p-2 rounded-lg mr-3 shadow-sm border border-black/5 dark:border-white/10
-                    ${iconColorClass}
-                `}>
-                    <DisplayIcon size={20} />
-                </div>
-                <div className="flex-1 min-w-0">
-                    <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate leading-tight">
-                        {node.data.label}
-                    </h3>
-                    <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider truncate mt-0.5">
-                        {definition?.name || node.type}
-                    </p>
-                </div>
-
-                {node.locked && (
-                    <div className="text-slate-400 dark:text-slate-500 mr-1" title="Node Locked">
-                        <Lock size={14} />
-                    </div>
-                )}
-
-
-
-                {/* Port Handles - Positioned on the separator line */}
-                {/* Input Port (Left) */}
-                <div
-                    className="absolute -left-[7px] top-[calc(100%+1px)] -translate-y-1/2 w-3.5 h-3.5 bg-white dark:bg-slate-400 border-2 border-slate-200 dark:border-slate-950 rounded-full hover:bg-blue-500 hover:scale-125 transition-all z-20 cursor-crosshair shadow-md node-interactive"
-                    title="Input"
-                    data-port-type="input"
-                    data-node-id={node.id}
-                    onMouseUp={(e) => handlePortMouseUp(e, 'input')}
-                ></div>
-
-                {/* Output Port (Right) - Only if NOT infrastructure */}
-                {definition?.category !== 'infrastructure' && (
-                    <div
-                        className="absolute -right-[7px] top-[calc(100%+1px)] -translate-y-1/2 w-3.5 h-3.5 bg-white dark:bg-slate-400 border-2 border-slate-200 dark:border-slate-950 rounded-full hover:bg-blue-500 hover:scale-125 transition-all z-20 cursor-crosshair shadow-md node-interactive"
-                        title="Output"
-                        data-port-type="output"
-                        data-node-id={node.id}
-                        onMouseDown={(e) => handlePortMouseDown(e, 'output')}
-                    ></div>
-                )}
-            </div>
-
-            {/* Body */}
-            <div className="p-3 bg-gray-50/50 dark:bg-slate-800/50 rounded-b-xl text-xs text-gray-500 dark:text-gray-400 space-y-1">
-                <div className="flex flex-col space-y-2">
-                    {Object.entries(node.data)
-                        .filter(([key]) => !['label', 'enabled', 'description', 'icon', 'locked'].includes(key))
-                        // Filter out monitoring stack keys if disabled
-                        .filter(([key]) => {
-                            if (node.type !== 'monitoring_stack') return true;
-
-                            const data = node.data;
-                            const isGrafanaEnabled = data.enable_grafana === true || data.enable_grafana === 'true';
-                            const isAlertmanagerEnabled = data.enable_alertmanager === true || data.enable_alertmanager === 'true';
-                            const isPrometheusEnabled = data.enable_prometheus === true || data.enable_prometheus === 'true';
-
-                            if (!isGrafanaEnabled && key.startsWith('grafana_')) return false;
-                            if (!isAlertmanagerEnabled && key.startsWith('alertmanager_')) return false;
-                            if (!isPrometheusEnabled && key.startsWith('prometheus_')) return false;
-
-                            return true;
-                        })
-                        .reduce((acc, [key, value]) => {
-                            if ((key === 'resources' || key === 'kindConfig') && typeof value === 'object' && value !== null) {
-                                return [...acc, ...Object.entries(value)];
-                            }
-                            return [...acc, [key, value]];
-                        }, [] as [string, any][])
-                        .sort((a, b) => {
-                            const priority = ['name', 'version', 'replicas', 'topology', 'networking', 'mounts'];
-                            const idxA = priority.indexOf(a[0]);
-                            const idxB = priority.indexOf(b[0]);
-                            if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-                            if (idxA !== -1) return -1;
-                            if (idxB !== -1) return 1;
-                            return a[0].localeCompare(b[0]);
-                        })
-                        .map(([key, value]) => {
-                            const isSensitive = isFieldSensitive(node.type, key);
-                            return (
-                                <div key={key} className="flex justify-between items-center w-full gap-2">
-                                    <span
-                                        className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate flex-1 min-w-0"
-                                        title={key}
-                                    >
-                                        {key}
-                                    </span>
-                                    <span
-                                        className="font-mono text-xs text-blue-600 dark:text-blue-400 font-bold truncate max-w-[50%] text-right shrink-0"
-                                        title={isSensitive ? 'Hidden' : (typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value))}
-                                    >
-                                        {isSensitive
-                                            ? '••••••••'
-                                            : (typeof value === 'object' && value !== null
-                                                ? JSON.stringify(value).replace(/["{}]/g, '').replace(/,/g, ', ')
-                                                : String(value))}
-                                    </span>
-                                </div>
-                            );
-                        })}
-
-                    {/* Render message if empty */}
-                    {Object.entries(node.data).filter(([key]) => !['label', 'enabled', 'description', 'icon', 'locked'].includes(key)).length === 0 && (
-                        <div className="text-center text-[10px] text-slate-400 italic py-1">
-                            No configuration
-                        </div>
-                    )}
-                </div>
-
-                {/* Status Indicator (Simplified) */}
-                <div className="mt-3">
-                    {/* Status Indicator (Simplified) */}
-                    <div className="mt-3">
-                        {node.data.enabled !== false ? (
-                            <span className="inline-flex items-center text-[10px] font-bold text-emerald-600 dark:text-emerald-500 bg-emerald-50 dark:bg-slate-900 border border-emerald-100 dark:border-slate-800 px-2 py-0.5 rounded-full">
-                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
-                                Ready
-                            </span>
-                        ) : (
-                            <span className="inline-flex items-center text-[10px] font-bold text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-2 py-0.5 rounded-full">
-                                <div className="w-1.5 h-1.5 rounded-full bg-slate-400 mr-1.5"></div>
-                                Disabled
-                            </span>
-                        )}
-                    </div>
-                </div>
-            </div>
+            <CanvasNodeHeader
+                node={node}
+                definition={definition}
+                DisplayIcon={DisplayIcon}
+                iconColorClass={iconColorClass}
+                onPortMouseDown={handlePortMouseDown}
+                onPortMouseUp={handlePortMouseUp}
+            />
+            <CanvasNodeBody node={node} />
         </div>
     );
 }

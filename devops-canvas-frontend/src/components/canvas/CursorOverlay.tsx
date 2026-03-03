@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { m, LazyMotion, domAnimation, AnimatePresence } from 'framer-motion';
 
 interface CursorProps {
     x: number;
@@ -26,7 +26,7 @@ const Cursor = ({ x, y, name, scale, pan }: CursorProps) => {
     const screenY = y * scale + pan.y;
 
     return (
-        <motion.div
+        <m.div
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1, x: screenX, y: screenY }}
             exit={{ opacity: 0, scale: 0.8 }}
@@ -58,11 +58,11 @@ const Cursor = ({ x, y, name, scale, pan }: CursorProps) => {
             >
                 {name}
             </div>
-        </motion.div>
+        </m.div>
     );
 };
 
-export interface CursorOverlayProps {
+interface CursorOverlayProps {
     cursors: { [key: string]: { x: number, y: number, name: string } };
     scale: number;
     pan: { x: number, y: number };
@@ -70,19 +70,21 @@ export interface CursorOverlayProps {
 
 export const CursorOverlay: React.FC<CursorOverlayProps> = ({ cursors, scale, pan }) => {
     return (
-        <div className="absolute inset-0 pointer-events-none overflow-hidden z-50">
-            <AnimatePresence>
-                {Object.entries(cursors).map(([id, cursor]) => (
-                    <Cursor
-                        key={id}
-                        x={cursor.x}
-                        y={cursor.y}
-                        name={cursor.name}
-                        scale={scale}
-                        pan={pan}
-                    />
-                ))}
-            </AnimatePresence>
-        </div>
+        <LazyMotion features={domAnimation}>
+            <div className="absolute inset-0 pointer-events-none overflow-hidden z-50">
+                <AnimatePresence>
+                    {Object.entries(cursors).map(([id, cursor]) => (
+                        <Cursor
+                            key={id}
+                            x={cursor.x}
+                            y={cursor.y}
+                            name={cursor.name}
+                            scale={scale}
+                            pan={pan}
+                        />
+                    ))}
+                </AnimatePresence>
+            </div>
+        </LazyMotion>
     );
 };

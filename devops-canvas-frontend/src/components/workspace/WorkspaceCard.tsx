@@ -78,6 +78,14 @@ export function WorkspaceCard({ workspace, onClick, onDelete, onEdit, onDuplicat
     return (
         <div
             onClick={onClick}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onClick();
+                }
+            }}
             className="group relative bg-white dark:bg-slate-900 rounded-xl border border-slate-300 dark:border-slate-800 p-5 hover:border-blue-500 dark:hover:border-blue-500 hover:shadow-[0_0_20px_rgba(59,130,246,0.15)] dark:hover:shadow-[0_0_20px_rgba(59,130,246,0.25)] transition-all duration-300 cursor-pointer overflow-visible"
         >
             <div className="flex justify-between items-start mb-4">

@@ -86,7 +86,7 @@ export function LoginPage() {
                 </form>
 
                 <div className="mt-6 text-center text-sm text-slate-600 dark:text-slate-500">
-                    Need help? <a href="#" className="text-blue-600 hover:underline">Contact Support</a>
+                    Need help? <a href="mailto:support@devopscanvas.io" className="text-blue-600 hover:underline">Contact Support</a>
                 </div>
             </div>
         </div>

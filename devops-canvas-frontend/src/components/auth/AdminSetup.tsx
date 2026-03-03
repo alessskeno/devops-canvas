@@ -150,7 +150,7 @@ export function AdminSetup() {
                             className="mr-2 rounded border-slate-400 text-blue-600 focus:ring-blue-500"
                         />
                         <label htmlFor="terms" className="text-xs text-slate-600 dark:text-slate-500">
-                            I agree to the <a href="#" className="text-blue-600 hover:underline">Terms of Service</a>
+                            I agree to the <a href="/terms" className="text-blue-600 hover:underline">Terms of Service</a>
                         </label>
                     </div>
 

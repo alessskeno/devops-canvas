@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useParams } from 'react-router-dom';
 import { useCanvasStore } from '../../store/canvasStore';
 import { Button } from '../shared/Button';
 import { Input } from '../shared/Input';
@@ -9,9 +10,12 @@ import { COMPONENT_REGISTRY } from '../../utils/componentRegistry';
 import { COMPONENT_CONFIG_SCHEMAS, ConfigField } from '../../utils/componentConfigSchemas';
 import { KindClusterConfigForm } from './KindClusterConfigForm';
 import { AlertmanagerConfigForm } from './AlertmanagerConfigForm';
+import { LogViewer } from './LogViewer';
+import { ConfigFieldRenderer } from './ConfigFieldRenderer';
 import api from '../../utils/api';
 
 export function ConfigPanel() {
+    const { id: workspaceId } = useParams<{ id: string }>();
     const {
         selectedNodeId, nodes, connections, updateNodeData, removeNode, selectNode,
         activePanelTab, setActivePanelTab
@@ -77,77 +81,15 @@ export function ConfigPanel() {
         updateNodeData(selectedNode.id, { [key]: value });
     };
 
-    const renderConfigField = (field: ConfigField) => (
-        <div key={field.key} className="mb-3">
-            {field.type === 'select' ? (
-                <Select
-                    label={field.label}
-                    value={selectedNode.data[field.key] || field.defaultValue || ''}
-                    onChange={(e) => handleChange(field.key, e.target.value)}
-                    options={
-                        field.dynamicOptions
-                            ? (loadingVersions[field.key]
-                                ? [{ label: 'Loading versions...', value: '' }]
-                                : (dynamicOptions[field.key] || []))
-                            : (field.options || [])
-                    }
-                    disabled={isLocked || (field.dynamicOptions && loadingVersions[field.key])}
-                />
-            ) : field.type === 'textarea' ? (
-                <div>
-                    <label className="block text-xs font-medium text-slate-800 dark:text-slate-400 mb-1.5">
-                        {field.label}
-                    </label>
-                    <textarea
-                        className="flex w-full rounded-md border border-slate-400 bg-white px-3 py-2 text-sm placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow dark:bg-slate-900 dark:border-slate-800 dark:text-white"
-                        rows={4}
-                        placeholder={field.placeholder}
-                        value={selectedNode.data[field.key] || ''}
-                        onChange={(e) => handleChange(field.key, e.target.value)}
-                        disabled={isLocked}
-                    />
-                </div>
-            ) : field.type === 'boolean' ? (
-                <div className="flex items-center justify-between py-1">
-                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{field.label}</span>
-                    <Toggle
-                        checked={selectedNode.data[field.key] !== undefined ? selectedNode.data[field.key] : field.defaultValue}
-                        onChange={(v) => handleChange(field.key, v)}
-                        disabled={isLocked}
-                    />
-                </div>
-            ) : field.type === 'node-select' ? (
-                <Select
-                    label={field.label}
-                    value={selectedNode.data[field.key] || ''}
-                    onChange={(e) => handleChange(field.key, e.target.value)}
-                    options={[
-                        { label: 'Select a connected node...', value: '' },
-                        ...nodes
-                            .filter(n => {
-                                const isCorrectType = n.type === field.nodeType;
-                                const isConnected = connections.some(conn =>
-                                    (conn.source === selectedNode.id && conn.target === n.id) ||
-                                    (conn.target === selectedNode.id && conn.source === n.id)
-                                );
-                                return isCorrectType && isConnected;
-                            })
-                            .map(n => ({ label: `${n.data.label} (${n.id.slice(0, 4)})`, value: n.id }))
-                    ]}
-                    disabled={isLocked}
-                />
-            ) : (
-                <Input
-                    label={field.label}
-                    type={field.type === 'password' ? 'password' : field.type === 'number' ? 'number' : 'text'}
-                    placeholder={field.placeholder}
-                    value={selectedNode.data[field.key] !== undefined ? selectedNode.data[field.key] : field.defaultValue || ''}
-                    onChange={(e) => handleChange(field.key, field.type === 'number' ? parseFloat(e.target.value) : e.target.value)}
-                    disabled={isLocked}
-                />
-            )}
-        </div>
-    );
+    // This function is now replaced by ConfigFieldRenderer component usage in the render method.
+    // We will remove this definition and use the imported component.
+    // However, since it depends on `handleChange`, `selectedNode`, `nodes`, `connections`, `isLocked`, `loadingVersions`, `dynamicOptions`, passing all these props is heavy. 
+    // Maybe better to keep it here or memoize it? 
+    // React doctor suggests breaking down large components. 
+    // Let's first remove the inline definition and unused imports if any.
+    // I'll leave it for now and focus on correctness.
+    // actually, I'll just leave it if I can't easily extract without prop drilling.
+
 
     return (
         <div className="w-80 h-full flex flex-col bg-slate-50 dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800">
@@ -206,12 +148,13 @@ export function ConfigPanel() {
 
                             <div className="mb-4">
                                 <div className="flex justify-between mb-1.5">
-                                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">CPU Limit</label>
+                                    <label htmlFor="cpu-limit" className="text-xs font-medium text-slate-700 dark:text-slate-300">CPU Limit</label>
                                     <span className="text-xs text-slate-500">
                                         {(selectedNode.data.resources?.cpu === 0 || selectedNode.data.resources?.cpu === undefined) ? 'Unlimited' : `${selectedNode.data.resources?.cpu} Cores`}
                                     </span>
                                 </div>
                                 <input
+                                    id="cpu-limit"
                                     type="range"
                                     min="0" max="4" step="0.1"
                                     className={`w-full h-1 rounded-lg appearance-none cursor-pointer ${isLocked ? 'bg-slate-100 dark:bg-slate-800' : 'bg-slate-200 dark:bg-slate-700 accent-blue-500'}`}
@@ -223,12 +166,13 @@ export function ConfigPanel() {
 
                             <div>
                                 <div className="flex justify-between mb-1.5">
-                                    <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Memory</label>
+                                    <label htmlFor="memory-limit" className="text-xs font-medium text-slate-700 dark:text-slate-300">Memory</label>
                                     <span className="text-xs text-slate-500">
                                         {(parseInt(String(selectedNode.data.resources?.memory || '0').replace(/[^0-9]/g, '')) === 0) ? 'Unlimited' : (selectedNode.data.resources?.memory || 'Unlimited')}
                                     </span>
                                 </div>
                                 <input
+                                    id="memory-limit"
                                     type="range"
                                     min="0" max="4096" step="128"
                                     className={`w-full h-1 rounded-lg appearance-none cursor-pointer ${isLocked ? 'bg-slate-100 dark:bg-slate-800' : 'bg-slate-200 dark:bg-slate-700 accent-blue-500'}`}
@@ -290,7 +234,20 @@ export function ConfigPanel() {
                                     const groupKeys = Object.keys(groups);
                                     const isGrouped = groupKeys.length > 1 || (groupKeys.length === 1 && groupKeys[0] !== 'General');
 
-                                    if (!isGrouped) return schema.map(renderConfigField);
+                                    if (!isGrouped) return schema.map(field => (
+                                        <ConfigFieldRenderer
+                                            key={field.key}
+                                            field={field}
+                                            value={selectedNode.data[field.key]}
+                                            onChange={handleChange}
+                                            isLocked={isLocked || false}
+                                            loadingVersions={loadingVersions}
+                                            dynamicOptions={dynamicOptions}
+                                            nodes={nodes}
+                                            connections={connections}
+                                            nodeId={selectedNode.id}
+                                            workspaceId={workspaceId}
+                                        />));
 
                                     return groupKeys.map(group => (
                                         <div key={group} className="border border-slate-200 dark:border-slate-800 rounded-md overflow-hidden mb-2">
@@ -303,7 +260,21 @@ export function ConfigPanel() {
                                             </button>
                                             {expandedGroups[group] && (
                                                 <div className="p-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800">
-                                                    {groups[group].map(renderConfigField)}
+                                                    {groups[group].map(field => (
+                                                        <ConfigFieldRenderer
+                                                            key={field.key}
+                                                            field={field}
+                                                            value={selectedNode.data[field.key]}
+                                                            onChange={handleChange}
+                                                            isLocked={isLocked || false}
+                                                            loadingVersions={loadingVersions}
+                                                            dynamicOptions={dynamicOptions}
+                                                            nodes={nodes}
+                                                            connections={connections}
+                                                            nodeId={selectedNode.id}
+                                                            workspaceId={workspaceId}
+                                                        />
+                                                    ))}
                                                     {group === 'Alertmanager' && selectedNode.type === 'monitoring_stack' && (
                                                         <div className="mt-4 border-t border-slate-100 dark:border-slate-800 pt-4">
                                                             <div className="text-xs font-semibold text-slate-500 uppercase mb-3 px-1">Detailed Config</div>
@@ -332,84 +303,11 @@ export function ConfigPanel() {
                 )}
 
                 {currentTab === 'Logs' && (
-                    <LogViewer workspaceId={selectedNode.data.workspace_id || selectedNode.id /* Fallback/Context issue? */} componentId={selectedNode.id} />
+                    <LogViewer workspaceId={workspaceId || selectedNode.id} componentId={selectedNode.id} />
                 )}
             </div>
         </div>
     );
 }
 
-// Sub-component to handle log fetching logic cleanly
-function LogViewer({ workspaceId, componentId }: { workspaceId?: string, componentId: string }) {
-    // Note: We need workspaceId. The node data might not have it directly if we didn't inject it.
-    // But we are in the canvas ctx. 
-    // Actually, we can get workspaceId from the URL (useParams) or from a store check.
-    // The safest is useParams but we are not inside a Route here directly? The parent is.
-    // Let's use window location strictly as fallback or pass it from parent?
-    // Parent `ConfigPanel` is inside `NodeEditor` maybe?
-    // Let's assume we can get it from the URL since we are on /workspace/:id
 
-    const [logs, setLogs] = useState<string[]>([]);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
-
-    // Extract workspace ID from URL
-    const pathname = window.location.pathname;
-    const match = pathname.match(/\/workspace\/([^\/]+)/);
-    const actualWorkspaceId = match ? match[1] : '';
-
-    const fetchLogs = React.useCallback(async () => {
-        if (!actualWorkspaceId) return;
-        setLoading(true);
-        setError('');
-        try {
-            const res = await api.get(`/deploy/${actualWorkspaceId}/logs?component_id=${componentId}`);
-            if (res.data && res.data.logs) {
-                setLogs(res.data.logs);
-            } else {
-                setLogs(['No logs returned.']);
-            }
-        } catch (err: any) {
-            setError(err.message || 'Failed to fetch logs');
-            setLogs([]);
-        } finally {
-            setLoading(false);
-        }
-    }, [actualWorkspaceId, componentId]);
-
-    React.useEffect(() => {
-        fetchLogs();
-        // Optional: Auto-poll? Let's just do manual refresh for now for simplicity/performance.
-    }, [fetchLogs]);
-
-    return (
-        <div className="flex flex-col h-full">
-            <div className="flex justify-between items-center mb-2 px-1">
-                <span className="text-[10px] font-bold text-slate-500 uppercase">Console Output</span>
-                <button
-                    onClick={fetchLogs}
-                    className="text-[10px] text-blue-600 hover:text-blue-800 flex items-center bg-blue-50 px-2 py-1 rounded"
-                    disabled={loading}
-                >
-                    {loading ? 'Refreshing...' : 'Refresh Logs'}
-                </button>
-            </div>
-
-            <div className="flex-1 bg-slate-950 text-slate-300 p-3 rounded-md font-mono text-[10px] leading-relaxed overflow-y-auto whitespace-pre-wrap">
-                {error && <div className="text-red-400 mb-2">[Error] {error}</div>}
-
-                {!loading && logs.length === 0 && !error && (
-                    <div className="text-slate-500 italic">No logs available (container might be starting or stopped).</div>
-                )}
-
-                {logs.map((line, i) => (
-                    <div key={i} className="border-b border-white/5 pb-0.5 mb-0.5 last:border-0 last:mb-0">
-                        {line}
-                    </div>
-                ))}
-
-                {loading && logs.length > 0 && <div className="text-blue-400 mt-2 animate-pulse">Updating...</div>}
-            </div>
-        </div>
-    );
-}

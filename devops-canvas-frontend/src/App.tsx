@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { MotionConfig, useReducedMotion } from "framer-motion";
 import { createBrowserRouter, RouterProvider, Navigate, Outlet } from 'react-router-dom';
 import { Toaster, useToasterStore, toast } from 'react-hot-toast';
 import { LoginPage } from './components/auth/LoginPage';
@@ -28,11 +29,14 @@ const RootLayout = () => {
       .forEach((t) => toast.dismiss(t.id));
   }, [toasts]);
 
+  // Ensure accessibility hook is used
+  useReducedMotion();
+
   return (
-    <>
+    <MotionConfig reducedMotion="user">
       <Toaster position="top-right" containerStyle={{ top: 20, right: 20 }} toastOptions={{ duration: 3000 }} />
       <Outlet />
-    </>
+    </MotionConfig>
   );
 };
 

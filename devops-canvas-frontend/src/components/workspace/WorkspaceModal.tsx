@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useReducer } from 'react';
 import { Button } from '../shared/Button';
 import { Input } from '../shared/Input';
 import { Modal } from '../shared/Modal';
@@ -13,42 +13,73 @@ interface WorkspaceModalProps {
     mode: 'create' | 'edit';
 }
 
-export function WorkspaceModal({ isOpen, onClose, onSubmit, initialData, mode }: WorkspaceModalProps) {
-    const [name, setName] = useState('');
-    const [description, setDescription] = useState('');
-    const [environment, setEnvironment] = useState('development');
-    const [visibility, setVisibility] = useState('private');
-    const [isLoading, setIsLoading] = useState(false);
+interface WorkspaceState {
+    name: string;
+    description: string;
+    environment: string;
+    visibility: string;
+    isLoading: boolean;
+}
 
-    useEffect(() => {
-        if (isOpen && initialData) {
-            setName(initialData.name || '');
-            setDescription(initialData.description || '');
-            setEnvironment(initialData.environment || 'development');
-            setVisibility(initialData.visibility || 'private');
-        } else if (isOpen) {
-            // Reset for create mode
-            setName('');
-            setDescription('');
-            setEnvironment('development');
-            setVisibility('private');
-        }
-    }, [isOpen, initialData]);
+type WorkspaceAction =
+    | { type: 'SET_FIELD'; field: keyof WorkspaceState; value: any }
+    | { type: 'RESET'; data?: Partial<Workspace> }
+    | { type: 'SET_LOADING'; value: boolean };
+
+const initialState: WorkspaceState = {
+    name: '',
+    description: '',
+    environment: 'development',
+    visibility: 'private',
+    isLoading: false
+};
+
+function workspaceReducer(state: WorkspaceState, action: WorkspaceAction): WorkspaceState {
+    switch (action.type) {
+        case 'SET_FIELD':
+            return { ...state, [action.field]: action.value };
+        case 'RESET':
+            return {
+                ...initialState,
+                name: action.data?.name || '',
+                description: action.data?.description || '',
+                environment: action.data?.environment || 'development',
+                visibility: action.data?.visibility || 'private'
+            };
+        case 'SET_LOADING':
+            return { ...state, isLoading: action.value };
+        default:
+            return state;
+    }
+}
+
+function getInitialState(initialData?: Partial<Workspace>): WorkspaceState {
+    return {
+        name: initialData?.name || '',
+        description: initialData?.description || '',
+        environment: initialData?.environment || 'development',
+        visibility: initialData?.visibility || 'private',
+        isLoading: false
+    };
+}
+
+export function WorkspaceModal({ isOpen, onClose, onSubmit, initialData, mode }: WorkspaceModalProps) {
+    const [state, dispatch] = useReducer(workspaceReducer, initialData, getInitialState);
 
     const handleSubmit = async () => {
-        setIsLoading(true);
+        dispatch({ type: 'SET_LOADING', value: true });
         try {
             await onSubmit({
-                name,
-                description,
-                environment,
-                visibility
+                name: state.name,
+                description: state.description,
+                environment: state.environment,
+                visibility: state.visibility
             });
             onClose();
         } catch (error) {
             console.error(error);
         } finally {
-            setIsLoading(false);
+            dispatch({ type: 'SET_LOADING', value: false });
         }
     };
 
@@ -62,20 +93,21 @@ export function WorkspaceModal({ isOpen, onClose, onSubmit, initialData, mode }:
                 <Input
                     label="Workspace Name"
                     placeholder="e.g. Production Cluster"
-                    value={name}
-                    onChange={e => setName(e.target.value)}
+                    value={state.name}
+                    onChange={e => dispatch({ type: 'SET_FIELD', field: 'name', value: e.target.value })}
                 />
 
                 <div>
-                    <label className="block text-xs font-medium text-slate-800 dark:text-slate-400 mb-1.5">
+                    <label htmlFor="workspace-description" className="block text-xs font-medium text-slate-800 dark:text-slate-400 mb-1.5">
                         Description
                     </label>
                     <textarea
+                        id="workspace-description"
                         className="flex w-full rounded-md border border-slate-400 bg-white px-3 py-2 text-sm placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow dark:bg-slate-900 dark:border-slate-800 dark:text-white"
                         rows={3}
                         placeholder="What is this infrastructure for?"
-                        value={description}
-                        onChange={e => setDescription(e.target.value)}
+                        value={state.description}
+                        onChange={e => dispatch({ type: 'SET_FIELD', field: 'description', value: e.target.value })}
                     ></textarea>
                 </div>
 
@@ -87,8 +119,8 @@ export function WorkspaceModal({ isOpen, onClose, onSubmit, initialData, mode }:
                             { value: 'staging', label: 'Staging' },
                             { value: 'production', label: 'Production' },
                         ]}
-                        value={environment}
-                        onChange={e => setEnvironment(e.target.value)}
+                        value={state.environment}
+                        onChange={e => dispatch({ type: 'SET_FIELD', field: 'environment', value: e.target.value })}
                     />
                     <Select
                         label="Visibility"
@@ -97,14 +129,14 @@ export function WorkspaceModal({ isOpen, onClose, onSubmit, initialData, mode }:
                             { value: 'team', label: 'Team Shared' },
                             { value: 'public', label: 'Public' },
                         ]}
-                        value={visibility}
-                        onChange={e => setVisibility(e.target.value)}
+                        value={state.visibility}
+                        onChange={e => dispatch({ type: 'SET_FIELD', field: 'visibility', value: e.target.value })}
                     />
                 </div>
 
                 <div className="flex justify-end space-x-3 mt-6">
                     <Button variant="ghost" onClick={onClose}>Cancel</Button>
-                    <Button onClick={handleSubmit} disabled={!name} isLoading={isLoading}>
+                    <Button onClick={handleSubmit} disabled={!state.name} isLoading={state.isLoading}>
                         {mode === 'create' ? "Create Workspace" : "Save Changes"}
                     </Button>
                 </div>

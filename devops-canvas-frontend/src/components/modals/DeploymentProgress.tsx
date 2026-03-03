@@ -52,8 +52,8 @@ export function DeploymentProgress({ isOpen, onClose, onCancel, logs, steps }: D
                 <div className="flex flex-col gap-6">
                     {/* Steps */}
                     <div className="w-full space-y-4">
-                        {steps.map((step, idx) => (
-                            <div key={idx} className={`p-2 rounded-lg ${step.status === 'error' ? 'bg-red-50 dark:bg-red-900/10' : 'hover:bg-gray-50 dark:hover:bg-slate-800'}`}>
+                        {steps.map((step) => (
+                            <div key={step.label} className={`p-2 rounded-lg ${step.status === 'error' ? 'bg-red-50 dark:bg-red-900/10' : 'hover:bg-gray-50 dark:hover:bg-slate-800'}`}>
                                 <div className="flex items-center space-x-3">
                                     {
                                         step.status === 'completed' ? <CheckCircle size={22} className="text-green-500" /> :

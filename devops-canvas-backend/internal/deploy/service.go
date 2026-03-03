@@ -5,6 +5,7 @@ import (
 
 	"devops-canvas-backend/internal/deploy/translator"
     "devops-canvas-backend/internal/realtime"
+    "devops-canvas-backend/internal/tenant"
 	"devops-canvas-backend/internal/workspace"
 	"encoding/json"
     "fmt"
@@ -27,15 +28,17 @@ type Service struct {
 	generator     *ManifestGenerator
     hub           *realtime.Hub
     dockerClient  *client.Client
+    provisioner   tenant.TenantProvisioner
 }
 
-func NewService(repo *Repository, workspaceRepo *workspace.Repository, generator *ManifestGenerator, hub *realtime.Hub, dockerClient *client.Client) *Service {
+func NewService(repo *Repository, workspaceRepo *workspace.Repository, generator *ManifestGenerator, hub *realtime.Hub, dockerClient *client.Client, provisioner tenant.TenantProvisioner) *Service {
 	return &Service{
 		repo:          repo,
 		workspaceRepo: workspaceRepo,
 		generator:     generator,
         hub:           hub,
         dockerClient:  dockerClient,
+        provisioner:   provisioner,
 	}
 }
 
@@ -59,6 +62,16 @@ func (s *Service) DeployWorkspace(ctx context.Context, workspaceID string) (stri
              s.cleanupDeployment(cleanupCtx, workspaceID, baseDir, isKind)
         }
     }()
+
+    // 0. Provision Infrastructure (SaaS / OSS)
+    // For SaaS: Ensures vCluster exists. For OSS: No-op.
+    // Ideally we get tenantID from context or workspace. For now using "default" or deriving.
+    // In advanced SaaS, we'd lookup workspace -> tenant.
+    tenantID := "default" 
+    if err := s.provisioner.Provision(ctx, tenantID); err != nil {
+         s.broadcastStep(workspaceID, "initializing", "error", "Provisioning Infrastructure Failed", err.Error())
+         return "", fmt.Errorf("failed to provision infrastructure: %w", err)
+    }
 
     // 1. Initializing
     s.broadcastStep(workspaceID, "initializing", "in-progress", "Initializing Deployment", "")

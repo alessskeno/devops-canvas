@@ -13,20 +13,29 @@ export const HighlightedText: React.FC<HighlightedTextProps> = ({
     className = "",
     highlightClassName = "bg-yellow-200 dark:bg-yellow-900/50 dark:text-yellow-200 font-medium rounded-sm px-0.5"
 }) => {
+    const parts = React.useMemo(() => {
+        if (!highlight.trim()) {
+            return [{ id: 'full', text: text, isHighlight: false }];
+        }
+        const regex = new RegExp(`(${highlight.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+        return text.split(regex).map(part => ({
+            id: crypto.randomUUID(),
+            text: part,
+            isHighlight: regex.test(part)
+        }));
+    }, [text, highlight]);
+
     if (!highlight.trim()) {
         return <span className={className}>{text}</span>;
     }
 
-    const regex = new RegExp(`(${highlight.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-    const parts = text.split(regex);
-
     return (
         <span className={className}>
-            {parts.map((part, i) =>
-                regex.test(part) ? (
-                    <span key={i} className={highlightClassName}>{part}</span>
+            {parts.map((part) =>
+                part.isHighlight ? (
+                    <span key={part.id} className={highlightClassName}>{part.text}</span>
                 ) : (
-                    <span key={i}>{part}</span>
+                    <span key={part.id}>{part.text}</span>
                 )
             )}
         </span>

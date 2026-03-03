@@ -19,7 +19,13 @@ export function TerminalModal({ isOpen, onClose, workspaceId, componentId, compo
     const xtermRef = useRef<Terminal | null>(null);
     const wsRef = useRef<WebSocket | null>(null);
     const fitAddonRef = useRef<FitAddon | null>(null);
+    const endpointRef = useRef<boolean>(true); // Mounted flag
     const [isFullscreen, setIsFullscreen] = useState(false);
+
+    useEffect(() => {
+        endpointRef.current = true;
+        return () => { endpointRef.current = false; };
+    }, []);
 
     useEffect(() => {
         if (!isOpen || !terminalRef.current) return;
@@ -60,7 +66,13 @@ export function TerminalModal({ isOpen, onClose, workspaceId, componentId, compo
         ws.onopen = () => {
             term.writeln(`\x1b[32m✔\x1b[0m Connected.`);
             wsRef.current = ws;
-            // No resize handler sent to backend yet in MVP
+
+            // Send initial size
+            ws.send(JSON.stringify({
+                type: 'resize',
+                cols: term.cols,
+                rows: term.rows
+            }));
         };
 
         ws.onmessage = (event) => {
@@ -83,13 +95,33 @@ export function TerminalModal({ isOpen, onClose, workspaceId, componentId, compo
         // Input Handling
         term.onData((data) => {
             if (ws.readyState === WebSocket.OPEN) {
-                ws.send(data);
+                ws.send(JSON.stringify({ type: 'input', data }));
             }
         });
 
-        // Resize Observer
+        // Resize Handler
+        const handleResize = (dims: { cols: number; rows: number }) => {
+            if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'resize',
+                    cols: dims.cols,
+                    rows: dims.rows
+                }));
+            }
+        };
+
+        // Listen for resize events from xterm (triggered by FitAddon)
+        term.onResize(handleResize);
+
+        // Resize Observer for Container with Debounce
+        let resizeTimeout: NodeJS.Timeout;
         const resizeObserver = new ResizeObserver(() => {
-            fitAddon.fit();
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                if (endpointRef.current) { // Check if component serves as mounted
+                    fitAddon.fit();
+                }
+            }, 100);
         });
         resizeObserver.observe(terminalRef.current);
 
@@ -124,9 +156,19 @@ export function TerminalModal({ isOpen, onClose, workspaceId, componentId, compo
                     <span>Terminal: <span className="text-blue-400 font-mono">{componentName}</span></span>
                 </div>
             }
-            size={isFullscreen ? 'full' : '2xl'}
+            size={isFullscreen ? 'full' : 'auto'}
+            padding="p-0"
+            resizable={!isFullscreen} // Disable resize in fullscreen
+            style={{
+                // Initial dimensions using min-width logic via style to allow growth/shrink if needed
+                // But generally width/height on resized element sets the starting size.
+                width: isFullscreen ? '100%' : (componentType === 'kind-cluster' ? '1000px' : '800px'),
+                height: isFullscreen ? '100%' : (componentType === 'kind-cluster' ? '600px' : '500px'),
+                maxWidth: '95vw',
+                maxHeight: '90vh'
+            }}
         >
-            <div className="flex flex-col h-full bg-[#1e293b] rounded-b-lg overflow-hidden relative">
+            <div className="flex flex-col h-full bg-[#1e293b] rounded-b-lg overflow-hidden relative w-full flex-1">
                 {/* Custom Toolbar Actions if needed */}
                 <div className="absolute top-[-44px] right-12 flex gap-2">
                     <button
@@ -140,7 +182,7 @@ export function TerminalModal({ isOpen, onClose, workspaceId, componentId, compo
 
                 <div
                     ref={terminalRef}
-                    className={`w-full ${isFullscreen ? 'h-[calc(100vh-140px)]' : 'h-[500px]'} p-2`}
+                    className={`w-full h-full min-w-[600px] min-h-[400px] bg-[#1e293b]`}
                 />
             </div>
         </Modal>

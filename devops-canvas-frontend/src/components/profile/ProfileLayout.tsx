@@ -58,8 +58,9 @@ const GeneralSettings = () => {
 
             <div className="grid grid-cols-1 gap-x-6 gap-y-6 sm:grid-cols-2">
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">First Name</label>
+                    <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">First Name</label>
                     <input
+                        id="firstName"
                         type="text"
                         value={firstName}
                         onChange={(e) => setFirstName(e.target.value)}
@@ -68,8 +69,9 @@ const GeneralSettings = () => {
                 </div>
 
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Last Name</label>
+                    <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Last Name</label>
                     <input
+                        id="lastName"
                         type="text"
                         value={lastName}
                         onChange={(e) => setLastName(e.target.value)}
@@ -78,8 +80,9 @@ const GeneralSettings = () => {
                 </div>
 
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Email Address</label>
+                    <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Email Address</label>
                     <input
+                        id="email"
                         type="email"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
@@ -88,8 +91,9 @@ const GeneralSettings = () => {
                 </div>
 
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Job Title</label>
+                    <label htmlFor="jobTitle" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Job Title</label>
                     <input
+                        id="jobTitle"
                         type="text"
                         value={jobTitle}
                         onChange={(e) => setJobTitle(e.target.value)}
@@ -162,8 +166,9 @@ const SecuritySettings = () => {
 
                 <div className="space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Current Password</label>
+                        <label htmlFor="currentPassword" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Current Password</label>
                         <input
+                            id="currentPassword"
                             type="password"
                             value={currentPassword}
                             onChange={(e) => setCurrentPassword(e.target.value)}
@@ -173,8 +178,9 @@ const SecuritySettings = () => {
 
                     <div className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">New Password</label>
+                            <label htmlFor="newPassword" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">New Password</label>
                             <input
+                                id="newPassword"
                                 type="password"
                                 value={newPassword}
                                 onChange={(e) => setNewPassword(e.target.value)}
@@ -182,8 +188,9 @@ const SecuritySettings = () => {
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Confirm New Password</label>
+                            <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Confirm New Password</label>
                             <input
+                                id="confirmPassword"
                                 type="password"
                                 value={confirmPassword}
                                 onChange={(e) => setConfirmPassword(e.target.value)}
@@ -248,6 +255,14 @@ const PreferencesSettings = () => {
                     {/* Light Mode Card */}
                     <div
                         onClick={() => !isDark && null}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                if (isDark) toggle();
+                            }
+                        }}
                         className={`cursor-pointer rounded-xl border-2 p-1 overflow-hidden transition-all ${!isDark ? 'border-blue-500 ring-2 ring-blue-500/20' : 'border-gray-200 dark:border-slate-700 hover:border-blue-300'}`}
                     >
                         <button onClick={() => isDark && toggle()} className="w-full text-left">
@@ -266,6 +281,14 @@ const PreferencesSettings = () => {
                     {/* Dark Mode Card */}
                     <div
                         onClick={() => isDark && null}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                if (!isDark) toggle();
+                            }
+                        }}
                         className={`cursor-pointer rounded-xl border-2 p-1 overflow-hidden transition-all ${isDark ? 'border-blue-500 ring-2 ring-blue-500/20' : 'border-gray-200 dark:border-slate-700 hover:border-blue-300'}`}
                     >
                         <button onClick={() => !isDark && toggle()} className="w-full text-left">

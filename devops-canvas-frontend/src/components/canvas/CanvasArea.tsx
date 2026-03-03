@@ -36,16 +36,15 @@ export function CanvasArea({ runningNodeIds, onNodeExec, activeCursors, sendCurs
 
     // Local temp mouse pos for draft line rendering (avoiding store thrashing for high freq updates)
     const [tempMousePos, setTempMousePos] = useState({ x: 0, y: 0 });
+    const prevDraftRef = useRef(draftConnection);
 
-    // Sync tempMousePos when draft starts (fix for jumping line)
-    useEffect(() => {
-        if (draftConnection) {
-            setTempMousePos(mouseRef.current);
-        }
-    }, [draftConnection]);
+    // Sync tempMousePos when draft starts (inline ref check instead of useEffect)
+    if (draftConnection && !prevDraftRef.current) {
+        setTempMousePos(mouseRef.current);
+    }
+    prevDraftRef.current = draftConnection;
 
     const handleWheel = (e: WheelEvent) => {
-        e.preventDefault();
         const zoomSensitivity = 0.001;
         const oldScale = scale;
         const newScale = Math.min(Math.max(scale - e.deltaY * zoomSensitivity, 0.1), 5);
@@ -166,11 +165,12 @@ export function CanvasArea({ runningNodeIds, onNodeExec, activeCursors, sendCurs
         }
     };
 
-    // Use useEffect for non-passive wheel listener
+    // Wheel listener for zoom — passive:true for scroll performance
+    // CSS overflow:hidden + touch-action:none on container prevents default scroll
     useEffect(() => {
         const element = containerRef.current;
         if (element) {
-            element.addEventListener('wheel', handleWheel, { passive: false });
+            element.addEventListener('wheel', handleWheel, { passive: true });
         }
         return () => {
             if (element) {
@@ -183,11 +183,14 @@ export function CanvasArea({ runningNodeIds, onNodeExec, activeCursors, sendCurs
         <div
             ref={containerRef}
             className="flex-1 overflow-hidden relative bg-gray-50 dark:bg-slate-950 grid-bg cursor-default selection:bg-transparent"
+            style={{ touchAction: 'none' }}
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
             onDragOver={handleDragOver}
             onDrop={handleDrop}
+            role="region"
+            aria-label="Canvas Area"
         >
             {/* Cursor Overlay */}
             <CursorOverlay cursors={activeCursors} scale={scale} pan={pan} />

@@ -26,6 +26,8 @@ func GetTranslator(componentType string) (ComponentTranslator, error) {
         return &MonitoringStackTranslator{}, nil
     case "kind-cluster":
         return &KindTranslator{}, nil
+    case "custom-container":
+        return &CustomContainerTranslator{}, nil
 	default:
 		return nil, fmt.Errorf("unsupported component type: %s", componentType)
 	}

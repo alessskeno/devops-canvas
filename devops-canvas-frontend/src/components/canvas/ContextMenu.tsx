@@ -61,7 +61,7 @@ export function ContextMenu({
         >
             {items.map((item, index) => (
                 <button
-                    key={index}
+                    key={item.label}
                     disabled={item.disabled}
                     onClick={() => {
                         if (item.disabled) return;

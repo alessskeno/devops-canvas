@@ -281,5 +281,16 @@ export const COMPONENT_CONFIG_SCHEMAS: Record<string, ConfigField[]> = {
             nodeType: 'file',
             placeholder: 'Select a Config File Node (Overrides inline content)'
         }
+    ],
+    'custom-container': [
+        {
+            key: 'buildContext',
+            label: 'Source Directory',
+            type: 'folder-upload' as any,
+            helpText: 'Upload the folder containing your Dockerfile and source code'
+        },
+        { key: 'containerPort', label: 'Container Port', type: 'number', defaultValue: 8080, helpText: 'Port your app listens on inside the container' },
+        { key: 'hostPort', label: 'Host Port', type: 'number', defaultValue: 8080, helpText: 'Port exposed on the host machine' },
+        { key: 'envVars', label: 'Environment Variables', type: 'textarea', placeholder: 'KEY=VALUE\nANOTHER_KEY=value\n# Lines starting with # are comments', helpText: 'One KEY=VALUE pair per line. Connected dependencies are auto-injected.' }
     ]
 };

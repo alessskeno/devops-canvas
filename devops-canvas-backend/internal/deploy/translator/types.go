@@ -1,14 +1,23 @@
 package translator
 
+// ComposeBuild represents the build section in docker-compose.yaml
+type ComposeBuild struct {
+    Context    string `yaml:"context" json:"context"`
+    Dockerfile string `yaml:"dockerfile,omitempty" json:"dockerfile,omitempty"`
+}
+
 // ComposeService represents a service definition in docker-compose.yaml
 type ComposeService struct {
-	Image       string            `yaml:"image" json:"image"`
+	Image       string            `yaml:"image,omitempty" json:"image,omitempty"`
+	Build       *ComposeBuild     `yaml:"build,omitempty" json:"build,omitempty"`
 	Ports       []string          `yaml:"ports,omitempty" json:"ports,omitempty"`
 	Environment map[string]string `yaml:"environment,omitempty" json:"environment,omitempty"`
 	Volumes     []string          `yaml:"volumes,omitempty" json:"volumes,omitempty"`
 	Command     []string          `yaml:"command,omitempty" json:"command,omitempty"`
 	Restart     string            `yaml:"restart,omitempty" json:"restart,omitempty"`
     Deploy      *DeployConfig     `yaml:"deploy,omitempty" json:"deploy,omitempty"`
+    DependsOn   []string          `yaml:"depends_on,omitempty" json:"depends_on,omitempty"`
+    Networks    []string          `yaml:"networks,omitempty" json:"networks,omitempty"`
 }
 
 type DeployConfig struct {

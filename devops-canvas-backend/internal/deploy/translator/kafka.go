@@ -35,35 +35,40 @@ func (t *KafkaTranslator) Translate(node models.Node, ctx TranslationContext) (*
         version = "latest"
     }
 
-    // For Kafka Single Node in Docker Compose
-    // Note: Kafka usually needs Zookeeper or Kraft. Minimal setup using bitnami/kafka (Kraft mode)
+    // For Kafka Single Node in Docker Compose using official Apache Kafka image (KRaft mode)
     env := map[string]string{
-        "KAFKA_CFG_NODE_ID": "1",
-        "KAFKA_CFG_PROCESS_ROLES": "controller,broker",
-        "KAFKA_CFG_LISTENERS": "PLAINTEXT://:9092,CONTROLLER://:9093",
-        "KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP": "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT",
-        "KAFKA_CFG_CONTROLLER_QUORUM_VOTERS": "1@127.0.0.1:9093",
-        "KAFKA_CFG_CONTROLLER_LISTENER_NAMES": "CONTROLLER",
+        "KAFKA_NODE_ID":                             "1",
+        "KAFKA_PROCESS_ROLES":                       "controller,broker",
+        "KAFKA_LISTENERS":                           "PLAINTEXT://:9092,CONTROLLER://:9093",
+        "KAFKA_ADVERTISED_LISTENERS":                "PLAINTEXT://localhost:9092",
+        "KAFKA_LISTENER_SECURITY_PROTOCOL_MAP":      "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT",
+        "KAFKA_CONTROLLER_QUORUM_VOTERS":            "1@localhost:9093",
+        "KAFKA_CONTROLLER_LISTENER_NAMES":           "CONTROLLER",
+        "KAFKA_INTER_BROKER_LISTENER_NAME":          "PLAINTEXT",
+        "KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR":     "1",
+        "KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR": "1",
+        "KAFKA_TRANSACTION_STATE_LOG_MIN_ISR":       "1",
+        "CLUSTER_ID":                                "devops-canvas-kafka-cluster",
     }
     
     if config.RetentionMs != nil {
-        env["KAFKA_CFG_LOG_RETENTION_MS"] = fmt.Sprintf("%v", config.RetentionMs)
+        env["KAFKA_LOG_RETENTION_MS"] = formatKafkaInt(config.RetentionMs)
     }
     if config.RetentionBytes != "" && config.RetentionBytes != "-1" {
-        env["KAFKA_CFG_LOG_RETENTION_BYTES"] = config.RetentionBytes
+        env["KAFKA_LOG_RETENTION_BYTES"] = config.RetentionBytes
     }
     if config.CleanupPolicy != "" {
-        env["KAFKA_CFG_LOG_CLEANUP_POLICY"] = config.CleanupPolicy
+        env["KAFKA_LOG_CLEANUP_POLICY"] = config.CleanupPolicy
     }
     if config.Partitions != nil {
-        env["KAFKA_CFG_NUM_PARTITIONS"] = fmt.Sprintf("%v", config.Partitions)
+        env["KAFKA_NUM_PARTITIONS"] = formatKafkaInt(config.Partitions)
     }
 
     compose := &ComposeService{
-        Image:       "bitnami/kafka:" + SanitizeDockerVersion(version),
-        Ports:       []string{"9092:9092"}, // Standard port
+        Image:       "apache/kafka:" + version,
+        Ports:       []string{"9092:9092"},
         Environment: env,
-        Volumes:     []string{"kafka_data_" + node.ID + ":/bitnami/kafka"},
+        Volumes:     []string{"kafka_data_" + node.ID + ":/tmp/kraft-combined-logs"},
         Restart:     "always",
     }
     
@@ -175,4 +180,20 @@ func (t *KafkaTranslator) Translate(node models.Node, ctx TranslationContext) (*
         DockerCompose: compose,
         HelmValues:    &helm,
     }, nil
+}
+
+// formatKafkaInt converts a JSON number (which Go unmarshals as float64) to a
+// plain integer string. This avoids scientific notation like "6.048e+08" which
+// Kafka rejects for config values that expect LONG integers.
+func formatKafkaInt(v any) string {
+    switch n := v.(type) {
+    case float64:
+        return fmt.Sprintf("%.0f", n)
+    case int:
+        return fmt.Sprintf("%d", n)
+    case int64:
+        return fmt.Sprintf("%d", n)
+    default:
+        return fmt.Sprintf("%v", v)
+    }
 }

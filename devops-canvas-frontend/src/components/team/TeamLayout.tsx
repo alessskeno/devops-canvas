@@ -17,6 +17,7 @@ import { Input } from '../shared/Input';
 import { useTeamStore, TeamMember } from '../../store/teamStore';
 import { useAuthStore } from '../../store/authStore';
 import toast from 'react-hot-toast';
+import { RoleBadge } from './RoleBadge';
 
 
 
@@ -127,8 +128,8 @@ export default function TeamLayout() {
                                         { user: 'Jane Doe', action: 'deployed', target: 'E-commerce Backend', time: '2 hours ago' },
                                         { user: 'Mike Ross', action: 'updated config', target: 'Redis Cache', time: '5 hours ago' },
                                         { user: 'Sarah Conner', action: 'added member', target: 'Alex Murphy', time: '1 day ago' },
-                                    ].map((activity, i) => (
-                                        <div key={i} className="flex items-center gap-3 text-sm">
+                                    ].map((activity) => (
+                                        <div key={`${activity.user}-${activity.time}`} className="flex items-center gap-3 text-sm">
                                             <div className="h-8 w-8 rounded-full bg-gray-100 dark:bg-slate-800 flex items-center justify-center text-xs font-bold text-gray-600 dark:text-gray-300">
                                                 {activity.user.charAt(0)}
                                             </div>
@@ -184,17 +185,22 @@ export default function TeamLayout() {
                                                         </div>
                                                     </td>
                                                     <td className="px-6 py-4">
-                                                        <select
-                                                            value={member.role}
-                                                            onChange={(e) => updateRole(member.id, e.target.value)}
-                                                            className="bg-transparent border-none text-gray-700 dark:text-gray-300 focus:ring-0 cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-800 rounded px-2 py-1 -ml-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                                                            disabled={user?.role !== 'Owner' || user?.id === member.id}
-                                                        >
-                                                            {member.role === 'Owner' && <option>Owner</option>}
-                                                            <option>Admin</option>
-                                                            <option>Editor</option>
-                                                            <option>Viewer</option>
-                                                        </select>
+                                                        {/* Conditionally render select or RoleBadge based on user permissions */}
+                                                        {user?.role === 'Owner' && user?.id !== member.id ? (
+                                                            <select
+                                                                value={member.role}
+                                                                onChange={(e) => updateRole(member.id, e.target.value)}
+                                                                className="bg-transparent border-none text-gray-700 dark:text-gray-300 focus:ring-0 cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-800 rounded px-2 py-1 -ml-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                disabled={user?.role !== 'Owner' || user?.id === member.id}
+                                                            >
+                                                                {member.role === 'Owner' && <option>Owner</option>}
+                                                                <option>Admin</option>
+                                                                <option>Editor</option>
+                                                                <option>Viewer</option>
+                                                            </select>
+                                                        ) : (
+                                                            <RoleBadge role={member.role} />
+                                                        )}
                                                     </td>
                                                     <td className="px-6 py-4">
                                                         <span className={cn("px-2 py-1 rounded-full text-xs font-medium", member.status === 'Active' ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400" : "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400")}>
@@ -235,16 +241,18 @@ export default function TeamLayout() {
                                 />
 
                                 <div>
-                                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 block">Role</label>
+                                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 block">Role</span>
                                     <div className="grid grid-cols-1 gap-3">
                                         {['Admin', 'Editor', 'Viewer'].map((role) => (
-                                            <label key={role} className={cn("flex items-start gap-3 p-3 border rounded-lg cursor-pointer transition-all", inviteRole === role ? "border-blue-500 bg-blue-50 dark:bg-blue-900/10" : "border-gray-200 dark:border-slate-700 hover:border-gray-300")}>
+                                            <label key={role} htmlFor={`role-${role}`} className={cn("flex items-start gap-3 p-3 border rounded-lg cursor-pointer transition-all", inviteRole === role ? "border-blue-500 bg-blue-50 dark:bg-blue-900/10" : "border-gray-200 dark:border-slate-700 hover:border-gray-300")}>
                                                 <input
                                                     type="radio"
+                                                    id={`role-${role}`}
                                                     name="role"
                                                     className="mt-1"
                                                     checked={inviteRole === role}
                                                     onChange={() => setInviteRole(role as any)}
+                                                    aria-label={`Select ${role} role`}
                                                 />
                                                 <div>
                                                     <div className="font-medium text-sm text-gray-900 dark:text-white">{role}</div>

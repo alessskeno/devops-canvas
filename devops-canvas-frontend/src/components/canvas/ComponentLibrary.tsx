@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Database, Box, Layers, Archive, MessageSquare, BarChart2, Star, Activity, FileText, Bell, Boxes, Container } from 'lucide-react';
+import { Search, Database, Box, Layers, Archive, MessageSquare, BarChart2, Star, Activity, FileText, Bell, Boxes, Container, Code } from 'lucide-react';
 import { HighlightedText } from '../shared/HighlightedText';
 import { COMPONENT_REGISTRY } from '../../utils/componentRegistry';
 import { ComponentDefinition } from '../../types';
@@ -16,6 +16,7 @@ export function ComponentLibrary() {
 
         { id: 'messaging', label: 'Queue' },
         { id: 'monitoring', label: 'Monitoring' },
+        { id: 'custom', label: 'Custom' },
         { id: 'configuration', label: 'Config' },
     ];
 
@@ -85,6 +86,7 @@ export function ComponentLibrary() {
                             {component.icon === 'BarChart' && <BarChart2 size={20} />}
                             {component.icon === 'FileText' && <FileText size={20} />}
                             {component.icon === 'Bell' && <Bell size={20} />}
+                            {component.icon === 'Code' && <Code size={20} />}
                         </div>
 
                         {/* Text Content */}

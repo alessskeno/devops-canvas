@@ -16,6 +16,7 @@ import (
 	"devops-canvas-backend/internal/deploy"
     "devops-canvas-backend/internal/realtime"
 	"devops-canvas-backend/internal/team"
+    "devops-canvas-backend/internal/tenant"
 	"devops-canvas-backend/internal/workspace"
 )
 
@@ -32,7 +33,8 @@ func main() {
 
 	// Initialize Auth Module
 	authRepo := auth.NewRepository()
-	authSvc := auth.NewService(authRepo)
+    localAuthProvider := auth.NewLocalAuthProvider(authRepo) // Use Local Strategy for OSS
+	authSvc := auth.NewService(localAuthProvider, authRepo)
 	authHandler := auth.NewHandler(authSvc)
 
     // --- Realtime / WebSocket Init ---
@@ -102,7 +104,7 @@ func main() {
 		deployRepo := deploy.NewRepository()
         manifestGenerator := deploy.NewManifestGenerator()
         
-        // Init Docker Client
+		// Init Docker Client
         dockerClient, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
         if err != nil {
             log.Printf("Failed to create Docker Client: %v", err)
@@ -113,7 +115,11 @@ func main() {
         // Workspace Module (Repo Needed for Deploy)
 		workspaceRepo := workspace.NewRepository()
         
-		deploySvc := deploy.NewService(deployRepo, workspaceRepo, manifestGenerator, hub, dockerClient) // Injected Hub and Docker Client
+        // Tenant Provisioner (OSS = SingleTenant)
+        // In SaaS entrypoint, this will be VClusterProvisioner
+        tenantProvisioner := tenant.NewSingleTenantProvisioner()
+        
+		deploySvc := deploy.NewService(deployRepo, workspaceRepo, manifestGenerator, hub, dockerClient, tenantProvisioner) 
 		deployHandler := deploy.NewHandler(deploySvc, authSvc)
 		deployHandler.RegisterRoutes(r)
 

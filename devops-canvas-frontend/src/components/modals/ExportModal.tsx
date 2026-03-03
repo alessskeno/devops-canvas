@@ -1,12 +1,11 @@
-import React, { useState } from 'react';
+import React, { useReducer, useEffect } from 'react';
 import yaml from 'js-yaml';
 import { Modal } from '../shared/Modal';
 import { Button } from '../shared/Button';
 import { Toggle } from '../shared/Toggle';
-import { Copy, Download, Share2, Eye, FileCode } from 'lucide-react';
+import { Copy, Download, Share2, Eye, Cloud } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useCanvasStore } from '../../store/canvasStore';
-import { useWorkspaceStore } from '../../store/workspaceStore';
 import { generateConfig } from '../../utils/exportConfig';
 import api from '../../utils/api';
 import { useParams } from 'react-router-dom';
@@ -16,72 +15,89 @@ interface ExportModalProps {
     onClose: () => void;
 }
 
+interface ExportState {
+    mode: 'canvas' | 'manifest';
+    format: 'yaml' | 'json';
+    excludeSecrets: boolean;
+    isLoadingManifests: boolean;
+    manifests: any | null;
+    manifestTab: 'docker' | 'helm' | 'chart' | 'configs';
+}
+
+type ExportAction =
+    | { type: 'SET_MODE'; payload: 'canvas' | 'manifest' }
+    | { type: 'SET_FORMAT'; payload: 'yaml' | 'json' }
+    | { type: 'TOGGLE_SECRETS'; payload: boolean }
+    | { type: 'FETCH_MANIFESTS_START' }
+    | { type: 'FETCH_MANIFESTS_SUCCESS'; payload: any }
+    | { type: 'FETCH_MANIFESTS_ERROR' }
+    | { type: 'SET_MANIFEST_TAB'; payload: 'docker' | 'helm' | 'chart' | 'configs' }
+    | { type: 'RESET' };
+
+const initialState: ExportState = {
+    mode: 'canvas',
+    format: 'yaml',
+    excludeSecrets: false,
+    isLoadingManifests: false,
+    manifests: null,
+    manifestTab: 'docker'
+};
+
+function exportReducer(state: ExportState, action: ExportAction): ExportState {
+    switch (action.type) {
+        case 'SET_MODE':
+            return { ...state, mode: action.payload };
+        case 'SET_FORMAT':
+            return { ...state, format: action.payload };
+        case 'TOGGLE_SECRETS':
+            return { ...state, excludeSecrets: action.payload };
+        case 'FETCH_MANIFESTS_START':
+            return { ...state, isLoadingManifests: true };
+        case 'FETCH_MANIFESTS_SUCCESS':
+            return {
+                ...state,
+                isLoadingManifests: false,
+                manifests: action.payload,
+                mode: 'manifest',
+                manifestTab: !action.payload.docker_compose && action.payload.chart_yaml ? 'chart' : 'docker'
+            };
+        case 'FETCH_MANIFESTS_ERROR':
+            return { ...state, isLoadingManifests: false };
+        case 'SET_MANIFEST_TAB':
+            return { ...state, manifestTab: action.payload };
+        case 'RESET':
+            return initialState;
+        default:
+            return state;
+    }
+}
+
 export function ExportModal({ isOpen, onClose }: ExportModalProps) {
     const { id: workspaceId } = useParams<{ id: string }>();
-    const [mode, setMode] = useState<'canvas' | 'manifest'>('canvas');
-    const [format, setFormat] = useState<'yaml' | 'json'>('yaml');
-    const [excludeSecrets, setExcludeSecrets] = useState(false);
-
-    // Manifest Preview State
-    const [isLoadingManifests, setIsLoadingManifests] = useState(false);
-    const [manifests, setManifests] = useState<any>(null);
-    const [manifestTab, setManifestTab] = useState<'docker' | 'helm' | 'chart' | 'configs'>('docker');
+    const [state, dispatch] = useReducer(exportReducer, initialState);
 
     const nodes = useCanvasStore((state) => state.nodes);
     const connections = useCanvasStore((state) => state.connections);
 
-    const configContent = generateConfig(nodes, connections, format, excludeSecrets);
+    const configContent = generateConfig(nodes, connections, state.format, state.excludeSecrets);
 
-    // Reset state and load manifests when modal opens
-    React.useEffect(() => {
-        if (isOpen && workspaceId && mode === 'manifest') {
-            loadManifests(); // Reload if already in manifest mode
-        } else if (isOpen && workspaceId) {
-            // Optional: Auto-load manifests? Or just reset to canvas?
-            // User complained: "click export button to see if the new component also added ... it didn't"
-            // If they are in "manifest" mode, we should reload.
-            // If they are in "canvas" mode (default), they have to click "Preview".
-            // If the user clicks "Export", it opens in 'canvas' mode by default (state initialization).
-            // Wait, state `const [mode, setMode] = useState('canvas')` initializes on mount.
-            // Since ExportModal creates new state on mount, if it unmounts and remounts, it resets.
-            // BUT proper implementation of a Modal often keeps it mounted and just hides it.
-            // If it stays mounted, we need to reset `mode` when `isOpen` becomes true?
-            // Or just ensure we fetch fresh data.
-            // Let's reset mode to 'canvas' on open, OR if we want to stay where we were, we must reload data.
-            // Safer to reset to canvas or force reload if in manifest.
-        }
-    }, [isOpen, workspaceId]);
 
-    // Actually, simpler fix: When clicking "Preview Manifests" button, it ALREADY calls `loadManifests`.
-    // The issue is likely that `ExportModal` is NOT unmounting, so `manifests` state is stale.
-    // If I add a useEffect to clear manifests or reload when isOpen becomes true.
-
-    React.useEffect(() => {
-        if (isOpen) {
-            // If we want to support instant preview update, we should invalid old manifests
-            setManifests(null);
-            // If the user was in 'manifest' mode, we should fetch.
-            // But simpler: just reset to 'canvas' mode?
-            setMode('canvas');
-        }
-    }, [isOpen]);
 
     const loadManifests = async () => {
         if (!workspaceId) return;
-        setIsLoadingManifests(true);
+        dispatch({ type: 'FETCH_MANIFESTS_START' });
         try {
             const response = await api.post(`/deploy/${workspaceId}/manifests`);
-            setManifests(response.data);
-            setMode('manifest');
+            dispatch({ type: 'FETCH_MANIFESTS_SUCCESS', payload: response.data });
         } catch (error) {
             toast.error('Failed to generate manifests');
             console.error(error);
-        } finally {
-            setIsLoadingManifests(false);
+            dispatch({ type: 'FETCH_MANIFESTS_ERROR' });
         }
     };
 
     const getManifestContent = () => {
+        const { manifests, manifestTab } = state;
         if (!manifests) return '';
         if (manifestTab === 'docker') {
             return manifests.docker_compose ? yaml.dump(manifests.docker_compose) : '# No Docker Compose configuration generated for this context';
@@ -98,18 +114,8 @@ export function ExportModal({ isOpen, onClose }: ExportModalProps) {
         return '';
     };
 
-    // Auto-select first populated tab if current is empty
-    React.useEffect(() => {
-        if (manifests) {
-            if (manifests.docker_compose && manifestTab === 'docker') return;
-            if (!manifests.docker_compose && manifests.chart_yaml) {
-                setManifestTab('chart');
-            }
-        }
-    }, [manifests]);
-
     const handleCopy = () => {
-        const content = mode === 'canvas' ? configContent : getManifestContent();
+        const content = state.mode === 'canvas' ? configContent : getManifestContent();
         navigator.clipboard.writeText(content);
         toast.success('Copied!');
     };
@@ -120,38 +126,38 @@ export function ExportModal({ isOpen, onClose }: ExportModalProps) {
                 {/* specialized header tabs */}
                 <div className="flex border-b border-gray-200 dark:border-gray-700">
                     <button
-                        onClick={() => setMode('canvas')}
-                        className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${mode === 'canvas' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                        onClick={() => dispatch({ type: 'SET_MODE', payload: 'canvas' })}
+                        className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${state.mode === 'canvas' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
                     >
                         Canvas State
                     </button>
                     <button
                         onClick={loadManifests}
-                        disabled={isLoadingManifests}
-                        className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${mode === 'manifest' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                        disabled={state.isLoadingManifests}
+                        className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 ${state.mode === 'manifest' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
                     >
-                        {isLoadingManifests ? 'Generating...' : <> <Eye size={14} /> Preview Manifests </>}
+                        {state.isLoadingManifests ? 'Generating...' : <> <Eye size={14} /> Preview Manifests </>}
                     </button>
                 </div>
 
-                {mode === 'canvas' ? (
+                {state.mode === 'canvas' ? (
                     <div className="space-y-4 animate-in fade-in">
                         <div className="flex items-center justify-between">
                             <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
                                 <button
-                                    onClick={() => setFormat('yaml')}
-                                    className={`px-3 py-1 text-sm font-medium rounded-md transition-all ${format === 'yaml' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}
+                                    onClick={() => dispatch({ type: 'SET_FORMAT', payload: 'yaml' })}
+                                    className={`px-3 py-1 text-sm font-medium rounded-md transition-all ${state.format === 'yaml' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}
                                 >YAML</button>
                                 <button
-                                    onClick={() => setFormat('json')}
-                                    className={`px-3 py-1 text-sm font-medium rounded-md transition-all ${format === 'json' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}
+                                    onClick={() => dispatch({ type: 'SET_FORMAT', payload: 'json' })}
+                                    className={`px-3 py-1 text-sm font-medium rounded-md transition-all ${state.format === 'json' ? 'bg-white shadow text-blue-600' : 'text-gray-500'}`}
                                 >JSON</button>
                             </div>
 
                             <Toggle
                                 label="Exclude sensitive data"
-                                checked={excludeSecrets}
-                                onChange={setExcludeSecrets}
+                                checked={state.excludeSecrets}
+                                onChange={(val) => dispatch({ type: 'TOGGLE_SECRETS', payload: val })}
                             />
                         </div>
                         <div className="relative">
@@ -167,10 +173,10 @@ export function ExportModal({ isOpen, onClose }: ExportModalProps) {
                     <div className="space-y-4 animate-in fade-in">
                         {/* Manifest Sub-tabs */}
                         <div className="flex gap-2 text-xs">
-                            <button onClick={() => setManifestTab('docker')} className={`px-3 py-1.5 rounded-full border ${manifestTab === 'docker' ? 'bg-blue-50 border-blue-200 text-blue-700' : 'text-gray-500 border-gray-200'}`}>Docker Compose</button>
-                            <button onClick={() => setManifestTab('chart')} className={`px-3 py-1.5 rounded-full border ${manifestTab === 'chart' ? 'bg-blue-50 border-blue-200 text-blue-700' : 'text-gray-500 border-gray-200'}`}>Chart.yaml</button>
-                            <button onClick={() => setManifestTab('helm')} className={`px-3 py-1.5 rounded-full border ${manifestTab === 'helm' ? 'bg-blue-50 border-blue-200 text-blue-700' : 'text-gray-500 border-gray-200'}`}>Helm Values</button>
-                            <button onClick={() => setManifestTab('configs')} className={`px-3 py-1.5 rounded-full border ${manifestTab === 'configs' ? 'bg-blue-50 border-blue-200 text-blue-700' : 'text-gray-500 border-gray-200'}`}>Configs</button>
+                            <button onClick={() => dispatch({ type: 'SET_MANIFEST_TAB', payload: 'docker' })} className={`px-3 py-1.5 rounded-full border ${state.manifestTab === 'docker' ? 'bg-blue-50 border-blue-200 text-blue-700' : 'text-gray-500 border-gray-200'}`}>Docker Compose</button>
+                            <button onClick={() => dispatch({ type: 'SET_MANIFEST_TAB', payload: 'chart' })} className={`px-3 py-1.5 rounded-full border ${state.manifestTab === 'chart' ? 'bg-blue-50 border-blue-200 text-blue-700' : 'text-gray-500 border-gray-200'}`}>Chart.yaml</button>
+                            <button onClick={() => dispatch({ type: 'SET_MANIFEST_TAB', payload: 'helm' })} className={`px-3 py-1.5 rounded-full border ${state.manifestTab === 'helm' ? 'bg-blue-50 border-blue-200 text-blue-700' : 'text-gray-500 border-gray-200'}`}>Helm Values</button>
+                            <button onClick={() => dispatch({ type: 'SET_MANIFEST_TAB', payload: 'configs' })} className={`px-3 py-1.5 rounded-full border ${state.manifestTab === 'configs' ? 'bg-blue-50 border-blue-200 text-blue-700' : 'text-gray-500 border-gray-200'}`}>Configs</button>
                         </div>
 
                         <div className="relative">

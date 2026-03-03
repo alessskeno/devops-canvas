@@ -23,11 +23,7 @@ export interface Workspace {
     componentTypes?: string[];
 }
 
-export interface NodePort {
-    id: string;
-    type: 'input' | 'output';
-    label?: string;
-}
+
 
 export interface CanvasNode {
     id: string;

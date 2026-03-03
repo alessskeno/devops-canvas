@@ -11,6 +11,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
+	"encoding/json"
+    "k8s.io/client-go/tools/remotecommand"
 )
 
 var upgrader = websocket.Upgrader{
@@ -19,6 +21,16 @@ var upgrader = websocket.Upgrader{
     CheckOrigin: func(r *http.Request) bool {
         return true // Initial dev setting
     },
+}
+
+// ... existing HandleTerminal ...
+
+// TerminalMessage defines the protocol for WS communication
+type TerminalMessage struct {
+    Type string `json:"type"` // "input", "resize"
+    Data string `json:"data,omitempty"`
+    Rows uint16 `json:"rows,omitempty"`
+    Cols uint16 `json:"cols,omitempty"`
 }
 
 // HandleTerminal connects a WebSocket to a container's shell
@@ -49,10 +61,14 @@ func (h *Handler) HandleTerminal(w http.ResponseWriter, r *http.Request) {
     // Adapter for Output (Writer) -> Send to WS
     wsWriter := &wsOutputWriter{ws: ws}
     
-    // Adapter for Input (Reader) -> Read from WS
+    // Resize Channel
+    resizeChan := make(chan remotecommand.TerminalSize, 1)
+    
+    // Adapter for Input (Reader) -> Read from WS (JSON Protocol)
     wsReader := &wsInputReader{
         ws: ws,
         readChan: make(chan []byte, 10),
+        resizeChan: resizeChan,
         closeChan: make(chan struct{}),
     }
     go wsReader.pumpRead()
@@ -74,7 +90,7 @@ func (h *Handler) HandleTerminal(w http.ResponseWriter, r *http.Request) {
     wsWriter.Write([]byte("\r\nConnected to container shell...\r\n"))
 
     log.Println("[Terminal] Executing shell...")
-    err = h.svc.ExecShell(ctx, workspaceID, componentID, cmd, wsReader, wsWriter)
+    err = h.svc.ExecShell(ctx, workspaceID, componentID, cmd, wsReader, wsWriter, resizeChan)
     if err != nil {
         log.Printf("[Terminal] ExecShell error: %v", err)
         wsWriter.Write([]byte(fmt.Sprintf("\r\nError: %v\r\n", err)))
@@ -107,6 +123,7 @@ func (w *wsOutputWriter) Write(p []byte) (n int, err error) {
 type wsInputReader struct {
     ws *websocket.Conn
     readChan chan []byte
+    resizeChan chan<- remotecommand.TerminalSize
     buffer []byte
     closeChan chan struct{}
     once sync.Once
@@ -124,7 +141,22 @@ func (r *wsInputReader) pumpRead() {
         if err != nil {
             break
         }
-        r.readChan <- message
+        
+        // Try to parse as JSON
+        var msg TerminalMessage
+        if err := json.Unmarshal(message, &msg); err == nil && msg.Type != "" {
+            if msg.Type == "input" {
+                 r.readChan <- []byte(msg.Data)
+            } else if msg.Type == "resize" {
+                 r.resizeChan <- remotecommand.TerminalSize{
+                     Width: msg.Cols,
+                     Height: msg.Rows,
+                 }
+            }
+        } else {
+            // Fallback: Treat raw message as input (backward compatibility if possible, or debugging)
+            r.readChan <- message
+        }
     }
 }
 
