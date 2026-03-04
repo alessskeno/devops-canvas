@@ -34,7 +34,7 @@ const RootLayout = () => {
 
   return (
     <MotionConfig reducedMotion="user">
-      <Toaster position="top-right" containerStyle={{ top: 20, right: 20 }} toastOptions={{ duration: 3000 }} />
+      <Toaster position="top-center" containerStyle={{ top: 20 }} toastOptions={{ duration: 3000 }} />
       <Outlet />
     </MotionConfig>
   );

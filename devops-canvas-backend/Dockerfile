@@ -22,7 +22,7 @@ RUN go mod tidy
 RUN CGO_ENABLED=0 GOOS=linux go build -o main ./cmd/api
 
 # Run Stage
-FROM alpine:3.18
+FROM alpine:3.21
 
 WORKDIR /app
 
@@ -30,12 +30,12 @@ WORKDIR /app
 RUN apk add --no-cache ca-certificates tzdata helm docker-cli docker-cli-compose curl
 
 # Install Kubectl
-RUN curl -LO https://dl.k8s.io/release/v1.28.2/bin/linux/amd64/kubectl && \
+RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" && \
     chmod +x ./kubectl && \
     mv ./kubectl /usr/local/bin/kubectl
 
 # Install Kind
-RUN curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64 && \
+RUN curl -Lo ./kind "https://kind.sigs.k8s.io/dl/v0.31.0/kind-linux-amd64" && \
     chmod +x ./kind && \
     mv ./kind /usr/local/bin/kind
 
