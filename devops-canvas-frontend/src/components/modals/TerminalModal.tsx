@@ -162,8 +162,8 @@ export function TerminalModal({ isOpen, onClose, workspaceId, componentId, compo
             style={{
                 // Initial dimensions using min-width logic via style to allow growth/shrink if needed
                 // But generally width/height on resized element sets the starting size.
-                width: isFullscreen ? '100%' : (componentType === 'kind-cluster' ? '1000px' : '800px'),
-                height: isFullscreen ? '100%' : (componentType === 'kind-cluster' ? '600px' : '500px'),
+                width: isFullscreen ? '100%' : '800px',
+                height: isFullscreen ? '100%' : '500px',
                 maxWidth: '95vw',
                 maxHeight: '90vh'
             }}

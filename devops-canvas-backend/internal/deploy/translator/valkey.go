@@ -1,222 +1,93 @@
 package translator
 
 import (
-    "encoding/json"
-    "fmt"
-    "devops-canvas-backend/internal/models"
+	"devops-canvas-backend/internal/models"
+	"encoding/json"
+	"fmt"
 )
 
 // ValkeyConfig reuses Redis logic mostly as it's a fork
 type ValkeyConfig struct {
-    CommonConfig
-    Version         string `json:"version"`
-    Port            any    `json:"port"`
-    Password        string `json:"requirepass,omitempty"`
-    MaxMemory       string `json:"maxmemory,omitempty"`
-    MaxMemoryPolicy string `json:"maxmemory-policy,omitempty"`
-    AppendOnly      string `json:"appendonly,omitempty"`
+	CommonConfig
+	Version         string `json:"version"`
+	Port            any    `json:"port"`
+	Password        string `json:"requirepass,omitempty"`
+	MaxMemory       string `json:"maxmemory,omitempty"`
+	MaxMemoryPolicy string `json:"maxmemory-policy,omitempty"`
+	AppendOnly      string `json:"appendonly,omitempty"`
 }
 
 type ValkeyTranslator struct{}
 
 func (t *ValkeyTranslator) Translate(node models.Node, ctx TranslationContext) (*GeneratedManifests, error) {
-    var config ValkeyConfig
-    if err := json.Unmarshal(node.Data, &config); err != nil {
-        return nil, fmt.Errorf("failed to parse valkey config: %v", err)
-    }
+	var config ValkeyConfig
+	if err := json.Unmarshal(node.Data, &config); err != nil {
+		return nil, fmt.Errorf("failed to parse valkey config: %v", err)
+	}
 
-    // Check Enabled
-    if config.Enabled != nil && !*config.Enabled {
-        return nil, nil
-    }
+	// Check Enabled
+	if config.Enabled != nil && !*config.Enabled {
+		return nil, nil
+	}
 
-    version := config.Version
-    if version == "" {
-        version = "latest"
-    }
-    
-    port := fmt.Sprintf("%v", config.Port)
-    if port == "" || port == "<nil>" {
-        port = "6379"
-    }
+	version := config.Version
+	if version == "" {
+		version = "latest"
+	}
 
-    env := map[string]string{}
-    command := []string{"valkey-server"}
-    
-    if config.Password != "" {
-        command = append(command, "--requirepass", config.Password)
-    }
-    
-    if config.AppendOnly == "yes" {
-        command = append(command, "--appendonly", "yes")
-    }
+	port := fmt.Sprintf("%v", config.Port)
+	if port == "" || port == "<nil>" {
+		port = "6379"
+	}
 
-    if config.MaxMemory != "" {
-        command = append(command, "--maxmemory", config.MaxMemory)
-    }
-    
-    if config.MaxMemoryPolicy != "" {
-        command = append(command, "--maxmemory-policy", config.MaxMemoryPolicy)
-    }
+	env := map[string]string{}
+	command := []string{"valkey-server"}
 
-    compose := &ComposeService{
-        Image:       "valkey/valkey:" + SanitizeDockerVersion(version),
-        Ports:       []string{port + ":6379"},
-        Environment: env,
-        Volumes:     []string{"valkey_data_" + node.ID + ":/data"},
-        Command:     command,
-        Restart:     "always",
-    }
-    
-    // Resource Limits for Docker Compose
-    if config.Resources != nil {
-        compose.Deploy = &DeployConfig{
-            Resources: &ResourcesBlock{Limits: ResourceLimits{}},
-        }
-        hasLimit := false
-        if config.Resources.CPU > 0 {
-            compose.Deploy.Resources.Limits.CPUs = fmt.Sprintf("%.1f", config.Resources.CPU)
-            hasLimit = true
-        }
-        if config.Resources.Memory != "" && config.Resources.Memory != "0" {
-            compose.Deploy.Resources.Limits.Memory = SanitizeMemoryForCompose(config.Resources.Memory)
-            hasLimit = true
-        }
-        if !hasLimit { compose.Deploy = nil }
-    }
+	if config.Password != "" {
+		command = append(command, "--requirepass", config.Password)
+	}
 
-    // Helm Values (Reuse Redis or Generic)
-    helm := make(HelmValues)
-    helm["image"] = map[string]interface{}{
-        "registry": "public.ecr.aws",
-    }
+	if config.AppendOnly == "yes" {
+		command = append(command, "--appendonly", "yes")
+	}
 
-    helm["auth"] = map[string]interface{}{
-        "enabled":  config.Password != "",
-        "password": config.Password,
-    }
-    helm["master"] = map[string]interface{}{
-        "service": map[string]interface{}{
-            "ports": map[string]interface{}{
-                "valkey": config.Port,
-            },
-        },
-        "persistence": map[string]interface{}{
-            "enabled": true,
-        },
-    }
-    
-    // Resource Limits for Helm
-    if config.Resources != nil {
-        resources := map[string]interface{}{}
-        limits := map[string]interface{}{}
-        requests := map[string]interface{}{}
-        
-        hasResource := false
-        if config.Resources.CPU > 0 {
-            limits["cpu"] = fmt.Sprintf("%.1f", config.Resources.CPU)
-            requests["cpu"] = fmt.Sprintf("%.1fm", config.Resources.CPU * 500)
-            hasResource = true
-        }
-        if config.Resources.Memory != "" && config.Resources.Memory != "0" {
-            limits["memory"] = config.Resources.Memory
-            requests["memory"] = config.Resources.Memory
-            hasResource = true
-        }
-        if hasResource {
-            resources["limits"] = limits
-            resources["requests"] = requests
-            helm["master"].(map[string]interface{})["resources"] = resources
-        }
-    }
-    
-    // Valkey (Bitnami) uses commonConfiguration similar to Redis for custom valkey.conf
-    extraConfig := ""
-    if config.MaxMemory != "" {
-        extraConfig += fmt.Sprintf("maxmemory %s\n", config.MaxMemory)
-    }
-    if config.MaxMemoryPolicy != "" {
-        extraConfig += fmt.Sprintf("maxmemory-policy %s\n", config.MaxMemoryPolicy)
-    }
-    if config.AppendOnly != "" {
-        extraConfig += fmt.Sprintf("appendonly %s\n", config.AppendOnly)
-    }
-    
-    if extraConfig != "" {
-        helm["commonConfiguration"] = extraConfig
-    }
+	if config.MaxMemory != "" {
+		command = append(command, "--maxmemory", config.MaxMemory)
+	}
 
-    // --- Monitoring Integration ---
-    if ctx.FindConnectedNodes != nil {
-        connected, _ := ctx.FindConnectedNodes(node.ID)
-        for _, neighbor := range connected {
-            if neighbor.Type == "monitoring_stack" {
-                // Connected to monitoring stack!
-                
-                helm["fullnameOverride"] = fmt.Sprintf("valkey-%s", node.ID[:4])
-                serviceName := fmt.Sprintf("valkey-%s-master", node.ID[:4])
+	if config.MaxMemoryPolicy != "" {
+		command = append(command, "--maxmemory-policy", config.MaxMemoryPolicy)
+	}
 
-                helm["metrics"] = map[string]interface{}{
-                    "enabled": true,
-                    "serviceMonitor": map[string]interface{}{
-                        "enabled": true,
-                        "labels": map[string]interface{}{
-                             "release": "devops-canvas-chart",
-                        },
-                    },
-                    "prometheusRule": map[string]interface{}{
-                        "enabled": true,
-                        "labels": map[string]interface{}{
-                             "release": "devops-canvas-chart",
-                        },
-                        "rules": []map[string]interface{}{
-                            {
-                                "alert": "ValkeyDown",
-                                "expr": fmt.Sprintf(`valkey_up{service="%s"} == 0`, serviceName),
-                                "for": "2m",
-                                "labels": map[string]interface{}{
-                                    "severity": "critical",
-                                },
-                                "annotations": map[string]interface{}{
-                                    "summary": "Valkey instance {{ $labels.instance }} down",
-                                    "description": "Valkey instance {{ $labels.instance }} is down",
-                                },
-                            },
-                            {
-                                "alert": "ValkeyMemoryHigh",
-                                "expr": fmt.Sprintf(`valkey_memory_used_bytes{service="%s"} * 100 / valkey_memory_max_bytes{service="%s"} > 90`, serviceName, serviceName),
-                                "for": "2m",
-                                "labels": map[string]interface{}{
-                                    "severity": "critical",
-                                },
-                                "annotations": map[string]interface{}{
-                                    "summary": "Valkey instance {{ $labels.instance }} is using too much memory",
-                                    "description": "Valkey instance {{ $labels.instance }} is using {{ $value }}% of its available memory.",
-                                },
-                            },
-                            {
-                                "alert": "ValkeyKeyEviction",
-                                "expr": fmt.Sprintf(`increase(valkey_evicted_keys_total{service="%s"}[5m]) > 0`, serviceName),
-                                "for": "1s",
-                                "labels": map[string]interface{}{
-                                    "severity": "critical",
-                                },
-                                "annotations": map[string]interface{}{
-                                    "summary": "Valkey instance {{ $labels.instance }} has evicted keys",
-                                    "description": "Valkey instance {{ $labels.instance }} has evicted {{ $value }} keys in the last 5 minutes.",
-                                },
-                            },
-                        },
-                    },
-                }
+	compose := &ComposeService{
+		Image:       "valkey/valkey:" + SanitizeDockerVersion(version),
+		Ports:       []string{port + ":6379"},
+		Environment: env,
+		Volumes:     DataVolumeSlice("valkey", node.ID),
+		Command:     command,
+		Restart:     "always",
+	}
 
-                break 
-            }
-        }
-    }
+	// Resource Limits for Docker Compose
+	if config.Resources != nil {
+		compose.Deploy = &DeployConfig{
+			Resources: &ResourcesBlock{Limits: ResourceLimits{}},
+		}
+		hasLimit := false
+		if config.Resources.CPU > 0 {
+			compose.Deploy.Resources.Limits.CPUs = fmt.Sprintf("%.1f", config.Resources.CPU)
+			hasLimit = true
+		}
+		if config.Resources.Memory != "" && config.Resources.Memory != "0" {
+			compose.Deploy.Resources.Limits.Memory = SanitizeMemoryForCompose(config.Resources.Memory)
+			hasLimit = true
+		}
+		if !hasLimit {
+			compose.Deploy = nil
+		}
+	}
 
-    return &GeneratedManifests{
-        DockerCompose: compose,
-        HelmValues:    &helm,
-    }, nil
+	return &GeneratedManifests{
+		DockerCompose: compose,
+	}, nil
 }

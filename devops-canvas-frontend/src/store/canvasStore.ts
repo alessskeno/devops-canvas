@@ -47,7 +47,7 @@ interface CanvasHistoryState {
 interface CanvasState {
     nodes: CanvasNode[];
     connections: Connection[];
-    selectedNodeId: string | null;
+    selectedNodeIds: string[];
     scale: number;
     pan: { x: number; y: number };
     isDragging: boolean;
@@ -63,11 +63,15 @@ interface CanvasState {
     // Actions
     addNode: (node: CanvasNode) => void;
     removeNode: (id: string) => void;
-    duplicateNode: (id: string) => void;
+    removeNodes: (ids: string[]) => void;
+    duplicateNode: (id?: string) => void;
     toggleLockNode: (id: string) => void;
     updateNodePosition: (id: string, position: { x: number; y: number }, saveToHistory?: boolean) => void;
     updateNodeData: (id: string, data: Partial<ComponentConfig>) => void;
     selectNode: (id: string | null) => void;
+    selectNodes: (ids: string[]) => void;
+    toggleNodeSelection: (id: string) => void;
+    clearSelection: () => void;
     setActivePanelTab: (tab: string) => void;
 
     addConnection: (connection: Connection) => void;
@@ -93,7 +97,7 @@ interface CanvasState {
 export const useCanvasStore = create<CanvasState>((set, get) => ({
     nodes: [],
     connections: [],
-    selectedNodeId: null,
+    selectedNodeIds: [],
     scale: 1,
     pan: { x: 0, y: 0 },
     isDragging: false,
@@ -130,29 +134,54 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
             future: [],
             nodes: newNodes.filter((n) => n.id !== id),
             connections: state.connections.filter((c) => c.source !== id && c.target !== id),
-            selectedNodeId: state.selectedNodeId === id ? null : state.selectedNodeId,
+            selectedNodeIds: state.selectedNodeIds.filter((sid) => sid !== id),
+        };
+    }),
+
+    removeNodes: (ids) => set((state) => {
+        if (ids.length === 0) return state;
+        const idSet = new Set(ids);
+        let newNodes = state.nodes.filter((n) => !idSet.has(n.id));
+        const newConnections = state.connections.filter(
+            (c) => !idSet.has(c.source) && !idSet.has(c.target)
+        );
+        ids.forEach((id) => {
+            newNodes = newNodes.map((n) => cleanupNodeConnection(n, id));
+        });
+        return {
+            past: [...state.past, { nodes: state.nodes, connections: state.connections }],
+            future: [],
+            nodes: newNodes,
+            connections: newConnections,
+            selectedNodeIds: state.selectedNodeIds.filter((sid) => !idSet.has(sid)),
         };
     }),
 
     duplicateNode: (id) => set((state) => {
-        const nodeToDuplicate = state.nodes.find(n => n.id === id);
-        if (!nodeToDuplicate) return state;
+        const idsToDup = id != null ? [id] : state.selectedNodeIds;
+        if (idsToDup.length === 0) return state;
 
-        const newNode: CanvasNode = {
-            ...nodeToDuplicate,
-            id: crypto.randomUUID(),
-            position: {
-                x: nodeToDuplicate.position.x + 50,
-                y: nodeToDuplicate.position.y + 50
-            },
-            selected: false,
-            data: { ...nodeToDuplicate.data, label: `${nodeToDuplicate.data.label} (Copy)` }
-        };
+        const newNodes: CanvasNode[] = [];
+        idsToDup.forEach((nodeId) => {
+            const nodeToDuplicate = state.nodes.find((n) => n.id === nodeId);
+            if (!nodeToDuplicate || nodeToDuplicate.locked) return;
+            newNodes.push({
+                ...nodeToDuplicate,
+                id: crypto.randomUUID(),
+                position: {
+                    x: nodeToDuplicate.position.x + 50,
+                    y: nodeToDuplicate.position.y + 50
+                },
+                selected: false,
+                data: { ...nodeToDuplicate.data, label: `${nodeToDuplicate.data.label} (Copy)` }
+            });
+        });
+        if (newNodes.length === 0) return state;
 
         return {
             past: [...state.past, { nodes: state.nodes, connections: state.connections }],
             future: [],
-            nodes: [...state.nodes, newNode]
+            nodes: [...state.nodes, ...newNodes]
         };
     }),
 
@@ -186,7 +215,20 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         nodes: state.nodes.map((n) => n.id === id ? { ...n, data: { ...n.data, ...data } } : n)
     })),
 
-    selectNode: (id) => set({ selectedNodeId: id, activePanelTab: 'General' }),
+    selectNode: (id) =>
+        set({
+            selectedNodeIds: id != null ? [id] : [],
+            activePanelTab: 'General'
+        }),
+    selectNodes: (ids) => set({ selectedNodeIds: ids, activePanelTab: 'General' }),
+    toggleNodeSelection: (id) =>
+        set((state) => {
+            const set = new Set(state.selectedNodeIds);
+            if (set.has(id)) set.delete(id);
+            else set.add(id);
+            return { selectedNodeIds: Array.from(set), activePanelTab: 'General' };
+        }),
+    clearSelection: () => set({ selectedNodeIds: [] }),
 
     addConnection: (connection) => set((state) => {
         // Prevent self-connections
@@ -246,7 +288,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
 
     resetView: () => set({ scale: 1, pan: { x: 0, y: 0 } }),
 
-    loadCanvas: (nodes, connections) => set({ nodes, connections, past: [], future: [] }),
+    loadCanvas: (nodes, connections) => set({ nodes, connections, past: [], future: [], selectedNodeIds: [] }),
 
     undo: () => set((state) => {
         if (state.past.length === 0) return state;
@@ -297,6 +339,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
                 connections: connections || [],
                 past: [],
                 future: [],
+                selectedNodeIds: [],
                 isLoading: false
             });
         } catch (error) {

@@ -26,7 +26,6 @@
 
 @layer utilities {
     .grid-bg {
-        background-size: 20px 20px;
         background-image: radial-gradient(circle, #E2E8F0 1px, transparent 1px);
     }
 

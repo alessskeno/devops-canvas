@@ -92,7 +92,7 @@ export function WorkspaceModal({ isOpen, onClose, onSubmit, initialData, mode }:
             <div className="space-y-4">
                 <Input
                     label="Workspace Name"
-                    placeholder="e.g. Production Cluster"
+                    placeholder="e.g. Production Environment"
                     value={state.name}
                     onChange={e => dispatch({ type: 'SET_FIELD', field: 'name', value: e.target.value })}
                 />
@@ -105,7 +105,7 @@ export function WorkspaceModal({ isOpen, onClose, onSubmit, initialData, mode }:
                         id="workspace-description"
                         className="flex w-full rounded-md border border-slate-400 bg-white px-3 py-2 text-sm placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow dark:bg-slate-900 dark:border-slate-800 dark:text-white"
                         rows={3}
-                        placeholder="What is this infrastructure for?"
+                        placeholder="What is this environment for?"
                         value={state.description}
                         onChange={e => dispatch({ type: 'SET_FIELD', field: 'description', value: e.target.value })}
                     ></textarea>

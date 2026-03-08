@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { ComponentLibrary } from './ComponentLibrary';
 import { CanvasArea } from './CanvasArea';
 import { ConfigPanel } from './ConfigPanel';
+import { ErrorBoundaryDebug } from './ErrorBoundaryDebug';
 import { Toggle } from '../shared/Toggle';
 import { Link, useBlocker, useParams } from 'react-router-dom';
 import {
@@ -43,7 +44,7 @@ export function NodeEditor() {
         undo, redo, past, future, resetView,
         nodes, connections,
         loadCanvas, fetchCanvas, saveCanvas, isSaving,
-        selectedNodeId, duplicateNode, removeNode
+        selectedNodeIds, duplicateNode, removeNodes
     } = useCanvasStore();
 
     const {
@@ -62,6 +63,8 @@ export function NodeEditor() {
         ...initial,
         sidebarVisible: localStorage.getItem('canvas_sidebar') !== 'false'
     }));
+
+    const canvasContainerRef = React.useRef<HTMLDivElement>(null);
 
     // Sync sidebar state to localStorage
     React.useEffect(() => {
@@ -175,14 +178,6 @@ export function NodeEditor() {
         const hasRunningContainers = workspaceStats.containers.length > 0;
 
         nodes.forEach(node => {
-            // Infrastructure Nodes are "Running" if the workspace is active (has containers)
-            if (node.type === 'docker-compose' || node.type === 'kind-cluster') {
-                if (hasRunningContainers) {
-                    running.add(node.id);
-                }
-                return;
-            }
-
             // Standard Components: Check for matching container
             const shortID = node.id.slice(0, 4);
             const expectedServiceFragment = `${node.type}-${shortID}`;
@@ -221,21 +216,41 @@ export function NodeEditor() {
         return () => window.removeEventListener('beforeunload', handleBeforeUnload);
     }, [state.hasUnsavedChanges]);
 
-    const handleZoomIn = () => setTransform(Math.min(scale + 0.1, 5), pan);
+    const handleZoomIn = () => setTransform(Math.min(scale + 0.1, 2), pan);
 
 
 
-    const handleZoomOut = () => setTransform(Math.max(scale - 0.1, 0.1), pan);
+    const handleZoomOut = () => setTransform(Math.max(scale - 0.1, 0.55), pan);
 
     const handleFitView = () => {
         if (nodes.length === 0) return setTransform(1, { x: 0, y: 0 });
 
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+        // Measure actual rendered node sizes from the DOM instead of hardcoding
+        const container = canvasContainerRef.current;
+        const domNodes = container?.querySelectorAll('.canvas-node');
+        const domSizeMap = new Map<string, { w: number; h: number }>();
+        domNodes?.forEach(el => {
+            const htmlEl = el as HTMLElement;
+            const style = htmlEl.style;
+            const match = style.transform?.match(/translate\(([^,]+)px,\s*([^)]+)px\)/);
+            if (match) {
+                const x = parseFloat(match[1]);
+                const y = parseFloat(match[2]);
+                const node = nodes.find(n => Math.abs(n.position.x - x) < 1 && Math.abs(n.position.y - y) < 1);
+                if (node) {
+                    domSizeMap.set(node.id, { w: htmlEl.offsetWidth, h: htmlEl.offsetHeight });
+                }
+            }
+        });
+
         nodes.forEach(n => {
+            const size = domSizeMap.get(n.id) || { w: 320, h: 200 };
             minX = Math.min(minX, n.position.x);
             minY = Math.min(minY, n.position.y);
-            maxX = Math.max(maxX, n.position.x + 256);
-            maxY = Math.max(maxY, n.position.y + 150);
+            maxX = Math.max(maxX, n.position.x + size.w);
+            maxY = Math.max(maxY, n.position.y + size.h);
         });
 
         const contentW = maxX - minX;
@@ -243,11 +258,13 @@ export function NodeEditor() {
         const cx = minX + contentW / 2;
         const cy = minY + contentH / 2;
 
-        const viewportW = window.innerWidth - (state.sidebarVisible ? 320 : 0);
-        const viewportH = window.innerHeight - 64;
+        const rect = container?.getBoundingClientRect();
+        const viewportW = rect ? rect.width : window.innerWidth - (state.sidebarVisible ? 320 : 0);
+        const viewportH = rect ? rect.height : window.innerHeight - 64 - 32;
 
-        const scaleW = viewportW / (contentW + 100);
-        const scaleH = viewportH / (contentH + 100);
+        const padding = 60;
+        const scaleW = viewportW / (contentW + padding * 2);
+        const scaleH = viewportH / (contentH + padding * 2);
         const newScale = Math.min(Math.min(scaleW, scaleH), 1);
 
         const newPanX = (viewportW / 2) - (cx * newScale);
@@ -262,13 +279,13 @@ export function NodeEditor() {
     useKeyboardShortcuts({
         nodes,
         connections,
-        selectedNodeId,
+        selectedNodeIds,
         undo,
         redo,
         past,
         future,
         duplicateNode,
-        removeNode,
+        removeNodes,
         handleSave,
         setShowExportModal
     });
@@ -328,14 +345,17 @@ export function NodeEditor() {
                     </div>
 
                     <CanvasArea
+                        ref={canvasContainerRef}
                         runningNodeIds={runningNodeIds}
                         onNodeExec={handleNodeExec}
                         activeCursors={activeCursors}
                         sendCursorMove={sendCursorMove}
                     />
 
-                    <div className={`transition-all duration-300 ease-in-out border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden absolute right-0 top-0 bottom-0 z-10 shadow-xl ${useCanvasStore(s => s.selectedNodeId) ? 'w-80 translate-x-0' : 'w-0 translate-x-full'}`}>
-                        <ConfigPanel />
+                    <div className={`transition-all duration-300 ease-in-out border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden absolute right-0 top-0 bottom-0 z-10 shadow-xl ${useCanvasStore(s => s.selectedNodeIds.length > 0) ? 'w-[400px] translate-x-0' : 'w-0 translate-x-full'}`}>
+                        <ErrorBoundaryDebug>
+                            <ConfigPanel />
+                        </ErrorBoundaryDebug>
                     </div>
                 </div>
             </div>

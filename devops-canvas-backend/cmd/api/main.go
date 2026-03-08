@@ -14,9 +14,9 @@ import (
 	"devops-canvas-backend/internal/auth"
 	"devops-canvas-backend/internal/db"
 	"devops-canvas-backend/internal/deploy"
-    "devops-canvas-backend/internal/realtime"
+	"devops-canvas-backend/internal/realtime"
 	"devops-canvas-backend/internal/team"
-    "devops-canvas-backend/internal/tenant"
+	"devops-canvas-backend/internal/tenant"
 	"devops-canvas-backend/internal/workspace"
 )
 
@@ -33,30 +33,30 @@ func main() {
 
 	// Initialize Auth Module
 	authRepo := auth.NewRepository()
-    localAuthProvider := auth.NewLocalAuthProvider(authRepo) // Use Local Strategy for OSS
+	localAuthProvider := auth.NewLocalAuthProvider(authRepo) // Use Local Strategy for OSS
 	authSvc := auth.NewService(localAuthProvider, authRepo)
 	authHandler := auth.NewHandler(authSvc)
 
-    // --- Realtime / WebSocket Init ---
-    redisAddr := os.Getenv("REDIS_ADDR")
-    if redisAddr == "" {
-        redisAddr = "localhost:6379"
-    }
-    
-    // 1. Redis Adapter
-    redisAdapter := realtime.NewRedisAdapter(redisAddr)
-    
-    // 2. Hub
-    hub := realtime.NewHub(redisAdapter)
-    go hub.Run()
-    
-    // 3. System Monitor
-    monitor := realtime.NewMonitor(hub)
-    monitor.Start()
+	// --- Realtime / WebSocket Init ---
+	redisAddr := os.Getenv("REDIS_ADDR")
+	if redisAddr == "" {
+		redisAddr = "localhost:6379"
+	}
 
-    // 4. Docker Monitor (Workspace Resources)
-    dockerMonitor := deploy.NewDockerMonitor(hub)
-    dockerMonitor.Start()
+	// 1. Redis Adapter
+	redisAdapter := realtime.NewRedisAdapter(redisAddr)
+
+	// 2. Hub
+	hub := realtime.NewHub(redisAdapter)
+	go hub.Run()
+
+	// 3. System Monitor
+	monitor := realtime.NewMonitor(hub)
+	monitor.Start()
+
+	// 4. Docker Monitor (Workspace Resources)
+	dockerMonitor := deploy.NewDockerMonitor(hub)
+	dockerMonitor.Start()
 
 	port := os.Getenv("PORT")
 
@@ -83,16 +83,16 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"status":"ok"}`))
 	})
-    
-    // WebSocket Route
-    r.Get("/api/ws", func(w http.ResponseWriter, r *http.Request) {
-        realtime.HandleWs(hub, w, r)
-    })
+
+	// WebSocket Route
+	r.Get("/api/ws", func(w http.ResponseWriter, r *http.Request) {
+		realtime.HandleWs(hub, w, r)
+	})
 
 	r.Route("/api", func(r chi.Router) {
 		// API routes will be mounted here
 		authHandler.RegisterRoutes(r)
-		
+
 		// Team Module
 		teamRepo := team.NewRepository()
 		teamSvc := team.NewService(teamRepo)
@@ -102,45 +102,45 @@ func main() {
 		// Workspace Module
 		// Deploy Module (Moved up to satisfy dependency)
 		deployRepo := deploy.NewRepository()
-        manifestGenerator := deploy.NewManifestGenerator()
-        
+		manifestGenerator := deploy.NewManifestGenerator()
+
 		// Init Docker Client
-        dockerClient, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-        if err != nil {
-            log.Printf("Failed to create Docker Client: %v", err)
-            // Continue but logs might fail
-            dockerClient = nil
-        }
-        
-        // Workspace Module (Repo Needed for Deploy)
+		dockerClient, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+		if err != nil {
+			log.Printf("Failed to create Docker Client: %v", err)
+			// Continue but logs might fail
+			dockerClient = nil
+		}
+
+		// Workspace Module (Repo Needed for Deploy)
 		workspaceRepo := workspace.NewRepository()
-        
-        // Tenant Provisioner (OSS = SingleTenant)
-        // In SaaS entrypoint, this will be VClusterProvisioner
-        tenantProvisioner := tenant.NewSingleTenantProvisioner()
-        
-		deploySvc := deploy.NewService(deployRepo, workspaceRepo, manifestGenerator, hub, dockerClient, tenantProvisioner) 
+
+		// Tenant Provisioner (OSS = SingleTenant)
+		// In SaaS entrypoint, this will be VClusterProvisioner
+		tenantProvisioner := tenant.NewSingleTenantProvisioner()
+
+		deploySvc := deploy.NewService(deployRepo, workspaceRepo, manifestGenerator, hub, dockerClient, tenantProvisioner)
 		deployHandler := deploy.NewHandler(deploySvc, authSvc)
 		deployHandler.RegisterRoutes(r)
 
-        // Workspace Module Svc & Handler
+		// Workspace Module Svc & Handler
 		workspaceSvc := workspace.NewService(workspaceRepo)
 		workspaceHandler := workspace.NewHandler(workspaceSvc, authSvc, deploySvc) // Injected Deploy Svc
 		workspaceHandler.RegisterRoutes(r)
 
 		r.Get("/version", func(w http.ResponseWriter, r *http.Request) {
-            w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Content-Type", "application/json")
 			w.Write([]byte(`{"version":"0.1.0"}`))
 		})
 	})
 
-	// Start Async Helm Repo Init
+	// Start Async Init
 	go func() {
-		log.Println("Initializing Helm Repositories...")
-		if err := deploy.InitHelmRepos(); err != nil {
-			log.Printf("Failed to initialize Helm Repos: %v", err)
+		log.Println("Initializing deploy module...")
+		if err := deploy.Init(); err != nil {
+			log.Printf("Deploy init failed: %v", err)
 		} else {
-			log.Println("Helm Repositories Initialized Successfully")
+			log.Println("Deploy module initialized")
 		}
 	}()
 

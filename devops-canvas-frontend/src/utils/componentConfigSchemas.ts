@@ -13,15 +13,7 @@ export interface ConfigField {
 
 export const COMPONENT_CONFIG_SCHEMAS: Record<string, ConfigField[]> = {
     'redis': [
-        {
-            key: 'version',
-            label: 'Version',
-            type: 'select',
-            options: [],
-            dynamicOptions: true
-        },
-        { key: 'port', label: 'Port', type: 'number', defaultValue: 6379 },
-        { key: 'maxmemory', label: 'Max Memory', type: 'text', placeholder: 'e.g. 512mb' },
+                        { key: 'maxmemory', label: 'Max Memory', type: 'text', placeholder: 'e.g. 512mb' },
         {
             key: 'maxmemory-policy',
             label: 'Eviction Policy',
@@ -47,15 +39,7 @@ export const COMPONENT_CONFIG_SCHEMAS: Record<string, ConfigField[]> = {
         { key: 'requirepass', label: 'Password', type: 'password' }
     ],
     'postgres': [
-        {
-            key: 'version',
-            label: 'Version',
-            type: 'select',
-            options: [],
-            dynamicOptions: true
-        },
-        { key: 'port', label: 'Port', type: 'number', defaultValue: 5432 },
-        { key: 'dbName', label: 'Database Name', type: 'text', defaultValue: 'app_db' },
+                        { key: 'dbName', label: 'Database Name', type: 'text', defaultValue: 'app_db' },
         { key: 'user', label: 'User', type: 'text', defaultValue: 'postgres' },
         { key: 'password', label: 'Password', type: 'password' },
         { key: 'shared_buffers', label: 'Shared Buffers', type: 'text', placeholder: '128MB' },
@@ -74,45 +58,17 @@ export const COMPONENT_CONFIG_SCHEMAS: Record<string, ConfigField[]> = {
         }
     ],
     'mysql': [
-        {
-            key: 'version',
-            label: 'Version',
-            type: 'select',
-            options: [],
-            dynamicOptions: true
-        },
-        { key: 'port', label: 'Port', type: 'number', defaultValue: 3306 },
-        { key: 'root_password', label: 'Root Password', type: 'password' },
+                        { key: 'root_password', label: 'Root Password', type: 'password' },
         { key: 'database', label: 'Database Name', type: 'text' },
+        { key: 'user', label: 'User', type: 'text', placeholder: 'Optional app user' },
+        { key: 'password', label: 'Password', type: 'password', placeholder: 'Optional app user password' },
         { key: 'max_connections', label: 'Max Connections', type: 'number', defaultValue: 151 },
         { key: 'innodb_buffer_pool_size', label: 'InnoDB Buffer Pool', type: 'text', placeholder: '128M' },
         { key: 'innodb_file_per_table', label: 'File Per Table', type: 'boolean', defaultValue: true }
     ],
-    'clickhouse': [
-        {
-            key: 'version',
-            label: 'Version',
-            type: 'select',
-            options: [],
-            dynamicOptions: true
-        },
-        { key: 'tcp_port', label: 'TCP Port', type: 'number', defaultValue: 9000 },
-        { key: 'http_port', label: 'HTTP Port', type: 'number', defaultValue: 8123 },
-        { key: 'max_connections', label: 'Max Connections', type: 'number', defaultValue: 4096 },
-        { key: 'max_concurrent_queries', label: 'Max Concurrent Queries', type: 'number', defaultValue: 100 },
-        { key: 'max_memory_usage', label: 'Max Memory Usage', type: 'text', placeholder: '0 (unlimited)' },
-        { key: 'max_threads', label: 'Max Threads', type: 'number' }
-    ],
+    'clickhouse': [],
     'valkey': [
-        {
-            key: 'version',
-            label: 'Version',
-            type: 'select',
-            options: [],
-            dynamicOptions: true
-        },
-        { key: 'port', label: 'Port', type: 'number', defaultValue: 6379 },
-        { key: 'maxmemory', label: 'Max Memory', type: 'text', placeholder: '256mb' },
+                        { key: 'maxmemory', label: 'Max Memory', type: 'text', placeholder: '256mb' },
         {
             key: 'maxmemory-policy',
             label: 'Eviction Policy',
@@ -138,14 +94,7 @@ export const COMPONENT_CONFIG_SCHEMAS: Record<string, ConfigField[]> = {
         { key: 'requirepass', label: 'Password', type: 'password' }
     ],
     'kafka': [
-        {
-            key: 'version',
-            label: 'Version',
-            type: 'select',
-            options: [],
-            dynamicOptions: true
-        },
-        { key: 'brokers', label: 'Brokers Count', type: 'number', defaultValue: 3 },
+                { key: 'brokers', label: 'Brokers Count', type: 'number', defaultValue: 3 },
         { key: 'retention_ms', label: 'Retention (ms)', type: 'number', defaultValue: 604800000 },
         { key: 'retention_bytes', label: 'Retention (bytes)', type: 'text', placeholder: '-1 (unlimited)' },
         {
@@ -162,15 +111,6 @@ export const COMPONENT_CONFIG_SCHEMAS: Record<string, ConfigField[]> = {
         { key: 'partitions', label: 'Default Partitions', type: 'number', defaultValue: 1 }
     ],
     'rabbitmq': [
-        {
-            key: 'version',
-            label: 'Version',
-            type: 'select',
-            options: [],
-            dynamicOptions: true
-        },
-        { key: 'port', label: 'Port', type: 'number', defaultValue: 5672 },
-        { key: 'management_port', label: 'Management Port', type: 'number', defaultValue: 15672 },
         { key: 'default_user', label: 'Default User', type: 'text', defaultValue: 'guest' },
         { key: 'default_pass', label: 'Default Password', type: 'password' },
         { key: 'channel_max', label: 'Channel Max', type: 'number', defaultValue: 0 },
@@ -180,8 +120,7 @@ export const COMPONENT_CONFIG_SCHEMAS: Record<string, ConfigField[]> = {
     ],
 
     'prometheus': [
-        { key: 'port', label: 'Port', type: 'number', defaultValue: 9090 },
-        { key: 'retention', label: 'Retention Period', type: 'text', defaultValue: '15d' },
+                { key: 'retention', label: 'Retention Period', type: 'text', defaultValue: '15d', placeholder: 'e.g. 15d' },
         { key: 'scrape_interval', label: 'Scrape Interval', type: 'text', defaultValue: '15s' },
         { key: 'scrape_timeout', label: 'Scrape Timeout', type: 'text', defaultValue: '10s' },
         { key: 'evaluation_interval', label: 'Evaluation Interval', type: 'text', defaultValue: '15s' },
@@ -198,89 +137,15 @@ export const COMPONENT_CONFIG_SCHEMAS: Record<string, ConfigField[]> = {
             type: 'node-select',
             nodeType: 'file',
             placeholder: 'Select a Config File Node'
-        },
-        {
-            key: 'alerting',
-            label: 'Alerting (Alertmanager)',
-            type: 'node-select',
-            nodeType: 'alertmanager',
-            placeholder: 'Select Alertmanager Node'
-        }
-    ],
-    'alertmanager': [
-        { key: 'port', label: 'Port', type: 'number', defaultValue: 9093 },
-        { key: 'retention', label: 'Retention', type: 'text', defaultValue: '120h' },
-        {
-            key: 'config_file',
-            label: 'Config File',
-            type: 'node-select',
-            nodeType: 'file',
-            placeholder: 'Select Config File Node'
         }
     ],
     'grafana': [
-        { key: 'port', label: 'Port', type: 'number', defaultValue: 3000 },
-        { key: 'admin_user', label: 'Admin User', type: 'text', defaultValue: 'admin' },
+                { key: 'admin_user', label: 'Admin User', type: 'text', defaultValue: 'admin' },
         { key: 'admin_password', label: 'Admin Password', type: 'password' },
         { key: 'allow_sign_up', label: 'Allow Sign Up', type: 'boolean', defaultValue: false }
     ],
-    'monitoring_stack': [
-        {
-            key: 'version',
-            label: 'Stack Version',
-            type: 'select',
-            options: [],
-            dynamicOptions: true
-        },
-        // Prometheus Group
-        { key: 'enable_prometheus', label: 'Enable Prometheus', type: 'boolean', defaultValue: true, group: 'Prometheus' },
-        { key: 'prometheus_port', label: 'Port', type: 'number', defaultValue: 9090, group: 'Prometheus' },
-        { key: 'prometheus_retention', label: 'Retention Period', type: 'text', defaultValue: '15d', placeholder: 'e.g. 15d', group: 'Prometheus' },
-        { key: 'prometheus_scrape_interval', label: 'Scrape Interval', type: 'text', defaultValue: '15s', group: 'Prometheus' },
-        { key: 'prometheus_scrape_timeout', label: 'Scrape Timeout', type: 'text', defaultValue: '10s', group: 'Prometheus' },
-        { key: 'prometheus_evaluation_interval', label: 'Evaluation Interval', type: 'text', defaultValue: '15s', group: 'Prometheus' },
-        {
-            key: 'prometheus_scrape_configs',
-            label: 'Scrape Configs File',
-            type: 'node-select',
-            nodeType: 'file',
-            placeholder: 'Select a Config File Node',
-            group: 'Prometheus'
-        },
-        {
-            key: 'prometheus_rules_files',
-            label: 'Rules Files',
-            type: 'node-select',
-            nodeType: 'file',
-            placeholder: 'Select a Config File Node',
-            group: 'Prometheus'
-        },
-
-        // Alertmanager Group
-        { key: 'enable_alertmanager', label: 'Enable Alertmanager', type: 'boolean', defaultValue: true, group: 'Alertmanager' },
-        { key: 'alertmanager_port', label: 'Port', type: 'number', defaultValue: 9093, group: 'Alertmanager' },
-        { key: 'alertmanager_retention', label: 'Retention', type: 'text', defaultValue: '120h', group: 'Alertmanager' },
-
-        // Grafana Group
-        { key: 'enable_grafana', label: 'Enable Grafana', type: 'boolean', defaultValue: true, group: 'Grafana' },
-        { key: 'grafana_port', label: 'Port', type: 'number', defaultValue: 3000, group: 'Grafana' },
-        { key: 'grafana_admin_user', label: 'Admin User', type: 'text', defaultValue: 'admin', group: 'Grafana' },
-        { key: 'grafana_admin_password', label: 'Admin Password', type: 'password', group: 'Grafana' },
-        { key: 'grafana_allow_sign_up', label: 'Allow Sign Up', type: 'boolean', defaultValue: false, group: 'Grafana' }
-    ],
-    'file': [
-        { key: 'filename', label: 'Filename', type: 'text', defaultValue: 'config.yaml' },
-        { key: 'content', label: 'File Content', type: 'textarea', placeholder: 'Write your configuration here...' }
-    ],
-    'kind-cluster': [
-        { key: 'name', label: 'Cluster Name', type: 'text', defaultValue: 'dev-cluster' },
-        {
-            key: 'configFile',
-            label: 'Or Select Config File Node',
-            type: 'node-select',
-            nodeType: 'file',
-            placeholder: 'Select a Config File Node (Overrides inline content)'
-        }
+    'alertmanager': [
+                { key: 'retention', label: 'Retention', type: 'text', defaultValue: '120h' }
     ],
     'custom-container': [
         {
@@ -290,7 +155,86 @@ export const COMPONENT_CONFIG_SCHEMAS: Record<string, ConfigField[]> = {
             helpText: 'Upload the folder containing your Dockerfile and source code'
         },
         { key: 'containerPort', label: 'Container Port', type: 'number', defaultValue: 8080, helpText: 'Port your app listens on inside the container' },
-        { key: 'hostPort', label: 'Host Port', type: 'number', defaultValue: 8080, helpText: 'Port exposed on the host machine' },
-        { key: 'envVars', label: 'Environment Variables', type: 'textarea', placeholder: 'KEY=VALUE\nANOTHER_KEY=value\n# Lines starting with # are comments', helpText: 'One KEY=VALUE pair per line. Connected dependencies are auto-injected.' }
-    ]
+        { key: 'hostPort', label: 'Host Port', type: 'number', defaultValue: 8080, helpText: 'Port exposed on the host machine' }
+    ],
+    'mongodb': [
+                        { key: 'database', label: 'Database Name', type: 'text', defaultValue: 'app_db' },
+        { key: 'root_username', label: 'Root Username', type: 'text', defaultValue: 'admin' },
+        { key: 'root_password', label: 'Root Password', type: 'password' },
+    ],
+    'mariadb': [
+                        { key: 'root_password', label: 'Root Password', type: 'password' },
+        { key: 'database', label: 'Database Name', type: 'text' },
+        { key: 'user', label: 'User', type: 'text', placeholder: 'Optional app user' },
+        { key: 'password', label: 'Password', type: 'password', placeholder: 'Optional app user password' },
+        { key: 'max_connections', label: 'Max Connections', type: 'number', defaultValue: 151 },
+    ],
+    'cassandra': [
+        { key: 'cluster_name', label: 'Cluster Name', type: 'text', defaultValue: 'Test Cluster' },
+        { key: 'num_tokens', label: 'Num Tokens', type: 'number', defaultValue: 256 },
+    ],
+    'cockroachdb': [
+        { key: 'database', label: 'Database Name', type: 'text', defaultValue: 'defaultdb' },
+    ],
+    'neo4j': [
+        { key: 'auth_password', label: 'Auth Password', type: 'password' },
+    ],
+    'minio': [
+        { key: 'root_user', label: 'Root User', type: 'text', defaultValue: 'minioadmin' },
+        { key: 'root_password', label: 'Root Password', type: 'password' },
+    ],
+    'nginx': [
+        { key: 'config_file', label: 'Config File', type: 'node-select', nodeType: 'file', placeholder: 'Select a Config File Node' },
+    ],
+    'traefik': [
+        { key: 'enable_dashboard', label: 'Enable Dashboard', type: 'boolean', defaultValue: true },
+    ],
+    'apache-http': [
+        { key: 'public_folder', label: 'Public folder (htdocs)', type: 'text', defaultValue: './public', helpText: 'Host path mounted at /usr/local/apache2/htdocs' },
+    ],
+    'kong': [
+        { key: 'database', label: 'Database', type: 'select', options: [{ label: 'off (DB-less)', value: 'off' }, { label: 'postgres', value: 'postgres' }], defaultValue: 'off' },
+    ],
+    'keycloak': [
+        { key: 'admin_user', label: 'Admin User', type: 'text', defaultValue: 'admin' },
+        { key: 'admin_password', label: 'Admin Password', type: 'password' },
+    ],
+    'vault': [
+        { key: 'dev_root_token', label: 'Dev Root Token', type: 'password', placeholder: 'myroot' },
+    ],
+    'supabase': [
+        { key: 'postgres_password', label: 'PostgreSQL Password', type: 'password', placeholder: 'Superuser password for Postgres' },
+        { key: 'anon_key', label: 'Anon Key (JWT)', type: 'password' },
+        { key: 'service_role_key', label: 'Service Role Key (JWT)', type: 'password' },
+    ],
+    'nats': [
+        { key: 'jetstream', label: 'Enable JetStream', type: 'boolean', defaultValue: false },
+    ],
+    'elasticsearch': [
+        { key: 'cluster_name', label: 'Cluster Name', type: 'text', defaultValue: 'docker-cluster' },
+        { key: 'discovery_type', label: 'Discovery Type', type: 'text', defaultValue: 'single-node' },
+        { key: 'es_java_opts', label: 'Java Opts (ES_JAVA_OPTS)', type: 'text', defaultValue: '-Xms512m -Xmx512m', placeholder: '-Xms512m -Xmx512m' },
+    ],
+    'meilisearch': [
+        { key: 'master_key', label: 'Master Key', type: 'password' },
+        { key: 'environment', label: 'Environment', type: 'select', options: [{ label: 'development', value: 'development' }, { label: 'production', value: 'production' }], defaultValue: 'development' },
+    ],
+    'opensearch': [
+        { key: 'cluster_name', label: 'Cluster Name', type: 'text', defaultValue: 'opensearch-cluster' },
+        { key: 'discovery_type', label: 'Discovery Type', type: 'text', defaultValue: 'single-node' },
+        { key: 'disable_security', label: 'Disable Security Plugin', type: 'boolean', defaultValue: true, helpText: 'Set DISABLE_SECURITY_PLUGIN=true (recommended for dev/test)' },
+    ],
+    'influxdb': [
+        { key: 'init_mode', label: 'Init Mode', type: 'text', defaultValue: 'setup', helpText: 'DOCKER_INFLUXDB_INIT_MODE (setup or upgrade)' },
+        { key: 'username', label: 'Username', type: 'text', defaultValue: 'admin' },
+        { key: 'password', label: 'Password', type: 'password' },
+        { key: 'org', label: 'Organization', type: 'text', defaultValue: 'my-org' },
+        { key: 'bucket', label: 'Bucket', type: 'text', defaultValue: 'my-bucket' },
+    ],
+    'jaeger': [],
+    'file': [
+        { key: 'label', label: 'Filename / label', type: 'text', defaultValue: 'config.yaml', helpText: 'Display name and filename hint (e.g. nginx.conf, config.yaml)' },
+        { key: 'content', label: 'File content', type: 'textarea', placeholder: 'Paste or type config content…', helpText: 'Content of the config file (e.g. nginx config, pg_hba.conf). Used when this file is attached to a service.' },
+    ],
 };
+

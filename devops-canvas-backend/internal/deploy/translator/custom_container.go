@@ -74,9 +74,8 @@ func (t *CustomContainerTranslator) Translate(node models.Node, ctx TranslationC
         }
     }
 
-    // Auto-inject connection info for connected dependencies
+    // Auto-inject connection info for connected dependencies (depends_on is applied centrally in service.go)
     connectedNodes, _ := ctx.FindConnectedNodes(node.ID)
-    var dependsOn []string
 
     for _, dep := range connectedNodes {
         // Skip infrastructure nodes
@@ -84,9 +83,7 @@ func (t *CustomContainerTranslator) Translate(node models.Node, ctx TranslationC
             continue
         }
 
-        // Build the service name the same way GenerateManifests does
         depServiceName := fmt.Sprintf("%s-%s", dep.Type, dep.ID[:4])
-        dependsOn = append(dependsOn, depServiceName)
 
         // Auto-inject common connection environment variables
         upperType := strings.ToUpper(strings.ReplaceAll(dep.Type, "-", "_"))
@@ -178,7 +175,7 @@ func (t *CustomContainerTranslator) Translate(node models.Node, ctx TranslationC
         }
     }
 
-    // Build the ComposeService
+    // Build the ComposeService (DependsOn is set centrally from canvas connections in service.go)
     service := &ComposeService{
         Build: &ComposeBuild{
             Context: contextDir,
@@ -188,7 +185,6 @@ func (t *CustomContainerTranslator) Translate(node models.Node, ctx TranslationC
         },
         Environment: env,
         Restart:     "unless-stopped",
-        DependsOn:   dependsOn,
     }
 
     return &GeneratedManifests{

@@ -21,7 +21,7 @@ interface ExportState {
     excludeSecrets: boolean;
     isLoadingManifests: boolean;
     manifests: any | null;
-    manifestTab: 'docker' | 'helm' | 'chart' | 'configs';
+    manifestTab: 'docker' | 'configs';
 }
 
 type ExportAction =
@@ -31,7 +31,7 @@ type ExportAction =
     | { type: 'FETCH_MANIFESTS_START' }
     | { type: 'FETCH_MANIFESTS_SUCCESS'; payload: any }
     | { type: 'FETCH_MANIFESTS_ERROR' }
-    | { type: 'SET_MANIFEST_TAB'; payload: 'docker' | 'helm' | 'chart' | 'configs' }
+    | { type: 'SET_MANIFEST_TAB'; payload: 'docker' | 'configs' }
     | { type: 'RESET' };
 
 const initialState: ExportState = {
@@ -59,7 +59,7 @@ function exportReducer(state: ExportState, action: ExportAction): ExportState {
                 isLoadingManifests: false,
                 manifests: action.payload,
                 mode: 'manifest',
-                manifestTab: !action.payload.docker_compose && action.payload.chart_yaml ? 'chart' : 'docker'
+                manifestTab: 'docker'
             };
         case 'FETCH_MANIFESTS_ERROR':
             return { ...state, isLoadingManifests: false };
@@ -100,13 +100,7 @@ export function ExportModal({ isOpen, onClose }: ExportModalProps) {
         const { manifests, manifestTab } = state;
         if (!manifests) return '';
         if (manifestTab === 'docker') {
-            return manifests.docker_compose ? yaml.dump(manifests.docker_compose) : '# No Docker Compose configuration generated for this context';
-        }
-        if (manifestTab === 'helm') {
-            return manifests.helm_values ? yaml.dump(manifests.helm_values, { lineWidth: -1 }) : '# No Helm values generated';
-        }
-        if (manifestTab === 'chart') {
-            return manifests.chart_yaml ? yaml.dump(manifests.chart_yaml) : '# No Chart.yaml generated';
+            return manifests.docker_compose ? yaml.dump(manifests.docker_compose) : '# No Docker Compose configuration generated';
         }
         if (manifestTab === 'configs') {
             return manifests.configs ? yaml.dump(manifests.configs) : '# No additional configs generated';
@@ -174,8 +168,6 @@ export function ExportModal({ isOpen, onClose }: ExportModalProps) {
                         {/* Manifest Sub-tabs */}
                         <div className="flex gap-2 text-xs">
                             <button onClick={() => dispatch({ type: 'SET_MANIFEST_TAB', payload: 'docker' })} className={`px-3 py-1.5 rounded-full border ${state.manifestTab === 'docker' ? 'bg-blue-50 border-blue-200 text-blue-700' : 'text-gray-500 border-gray-200'}`}>Docker Compose</button>
-                            <button onClick={() => dispatch({ type: 'SET_MANIFEST_TAB', payload: 'chart' })} className={`px-3 py-1.5 rounded-full border ${state.manifestTab === 'chart' ? 'bg-blue-50 border-blue-200 text-blue-700' : 'text-gray-500 border-gray-200'}`}>Chart.yaml</button>
-                            <button onClick={() => dispatch({ type: 'SET_MANIFEST_TAB', payload: 'helm' })} className={`px-3 py-1.5 rounded-full border ${state.manifestTab === 'helm' ? 'bg-blue-50 border-blue-200 text-blue-700' : 'text-gray-500 border-gray-200'}`}>Helm Values</button>
                             <button onClick={() => dispatch({ type: 'SET_MANIFEST_TAB', payload: 'configs' })} className={`px-3 py-1.5 rounded-full border ${state.manifestTab === 'configs' ? 'bg-blue-50 border-blue-200 text-blue-700' : 'text-gray-500 border-gray-200'}`}>Configs</button>
                         </div>
 

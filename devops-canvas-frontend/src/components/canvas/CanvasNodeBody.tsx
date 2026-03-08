@@ -12,23 +12,8 @@ export function CanvasNodeBody({ node }: CanvasNodeBodyProps) {
             <div className="flex flex-col space-y-2">
                 {Object.entries(node.data)
                     .filter(([key]) => !['label', 'enabled', 'description', 'icon', 'locked', 'buildContextId', 'workspace_id', 'componentType'].includes(key))
-                    // Filter out monitoring stack keys if disabled
-                    .filter(([key]) => {
-                        if (node.type !== 'monitoring_stack') return true;
-
-                        const data = node.data;
-                        const isGrafanaEnabled = data.enable_grafana === true || data.enable_grafana === 'true';
-                        const isAlertmanagerEnabled = data.enable_alertmanager === true || data.enable_alertmanager === 'true';
-                        const isPrometheusEnabled = data.enable_prometheus === true || data.enable_prometheus === 'true';
-
-                        if (!isGrafanaEnabled && key.startsWith('grafana_')) return false;
-                        if (!isAlertmanagerEnabled && key.startsWith('alertmanager_')) return false;
-                        if (!isPrometheusEnabled && key.startsWith('prometheus_')) return false;
-
-                        return true;
-                    })
                     .reduce((acc, [key, value]) => {
-                        if ((key === 'resources' || key === 'kindConfig') && typeof value === 'object' && value !== null) {
+                        if (key === 'resources' && typeof value === 'object' && value !== null) {
                             return [...acc, ...Object.entries(value)];
                         }
                         return [...acc, [key, value]];

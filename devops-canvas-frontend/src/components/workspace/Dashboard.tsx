@@ -229,7 +229,7 @@ export function Dashboard() {
                         Are you sure you want to delete <span className="font-bold text-slate-900 dark:text-white">{state.workspaceToDelete?.name}</span>? This action cannot be undone.
                     </p>
                     <div className="bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-200 p-3 rounded-md text-xs border border-amber-200 dark:border-amber-800/30">
-                        <strong>Warning:</strong> Deleting this workspace will immediately terminate all running components and clusters (Kind/Docker) associated with it.
+                        <strong>Warning:</strong> Deleting this workspace will immediately terminate all running components associated with it.
                     </div>
                     <div className="flex justify-end gap-3 mt-2">
                         <Button variant="secondary" onClick={() => dispatch({ type: 'SET_WORKSPACE_TO_DELETE', workspace: null })}>Cancel</Button>

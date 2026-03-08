@@ -44,24 +44,26 @@ export function CanvasNodeHeader({
 
             {/* Port Handles - Positioned on the separator line */}
             {/* Input Port (Left) */}
-            <div
-                className="absolute -left-[7px] top-[calc(100%+1px)] -translate-y-1/2 w-3.5 h-3.5 bg-white dark:bg-slate-400 border-2 border-slate-200 dark:border-slate-950 rounded-full hover:bg-blue-500 hover:scale-125 transition-all z-20 cursor-crosshair shadow-md node-interactive"
-                title="Input"
-                data-port-type="input"
-                data-node-id={node.id}
-                role="button"
-                tabIndex={0}
-                aria-label="Input Port"
-                onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                    }
-                }}
-                onMouseUp={(e) => onPortMouseUp(e, 'input')}
-            ></div>
+            {definition?.allowInput !== false && (
+                <div
+                    className="absolute -left-[7px] top-[calc(100%+1px)] -translate-y-1/2 w-3.5 h-3.5 bg-white dark:bg-slate-400 border-2 border-slate-200 dark:border-slate-950 rounded-full hover:bg-blue-500 hover:scale-125 transition-all z-20 cursor-crosshair shadow-md node-interactive"
+                    title="Input"
+                    data-port-type="input"
+                    data-node-id={node.id}
+                    role="button"
+                    tabIndex={0}
+                    aria-label="Input Port"
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                        }
+                    }}
+                    onMouseUp={(e) => onPortMouseUp(e, 'input')}
+                ></div>
+            )}
 
-            {/* Output Port (Right) - Only if NOT infrastructure */}
-            {definition?.category !== 'infrastructure' && (
+            {/* Output Port (Right) */}
+            {definition?.allowOutput !== false && (
                 <div
                     className="absolute -right-[7px] top-[calc(100%+1px)] -translate-y-1/2 w-3.5 h-3.5 bg-white dark:bg-slate-400 border-2 border-slate-200 dark:border-slate-950 rounded-full hover:bg-blue-500 hover:scale-125 transition-all z-20 cursor-crosshair shadow-md node-interactive"
                     title="Output"

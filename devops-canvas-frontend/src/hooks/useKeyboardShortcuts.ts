@@ -4,13 +4,13 @@ import { CanvasNode, Connection } from '../types';
 interface KeyboardShortcutsProps {
     nodes: CanvasNode[];
     connections: Connection[];
-    selectedNodeId: string | null;
+    selectedNodeIds: string[];
     undo: () => void;
     redo: () => void;
-    past: any[]; // History states
+    past: any[];
     future: any[];
-    duplicateNode: (id: string) => void;
-    removeNode: (id: string) => void;
+    duplicateNode: (id?: string) => void;
+    removeNodes: (ids: string[]) => void;
     handleSave: () => void;
     setShowExportModal: (show: boolean) => void;
 }
@@ -18,19 +18,18 @@ interface KeyboardShortcutsProps {
 export function useKeyboardShortcuts({
     nodes,
     connections,
-    selectedNodeId,
+    selectedNodeIds,
     undo,
     redo,
     past,
     future,
     duplicateNode,
-    removeNode,
+    removeNodes,
     handleSave,
     setShowExportModal
 }: KeyboardShortcutsProps) {
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
-            // Ignore if input focused
             if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'TEXTAREA') return;
 
             if (e.metaKey || e.ctrlKey) {
@@ -49,9 +48,12 @@ export function useKeyboardShortcuts({
                         break;
                     case 'd':
                         e.preventDefault();
-                        if (selectedNodeId) {
-                            const node = nodes.find(n => n.id === selectedNodeId);
-                            if (node && !node.locked) duplicateNode(selectedNodeId);
+                        if (selectedNodeIds.length > 0) {
+                            const toDuplicate = selectedNodeIds.filter(id => {
+                                const node = nodes.find(n => n.id === id);
+                                return node && !node.locked;
+                            });
+                            toDuplicate.forEach(id => duplicateNode(id));
                         }
                         break;
                     case 'e':
@@ -61,14 +63,17 @@ export function useKeyboardShortcuts({
                 }
             } else {
                 if (e.key === 'Delete' || e.key === 'Backspace') {
-                    if (selectedNodeId) {
-                        const node = nodes.find(n => n.id === selectedNodeId);
-                        if (node && !node.locked) removeNode(selectedNodeId);
+                    if (selectedNodeIds.length > 0) {
+                        const toRemove = selectedNodeIds.filter(id => {
+                            const node = nodes.find(n => n.id === id);
+                            return node && !node.locked;
+                        });
+                        if (toRemove.length > 0) removeNodes(toRemove);
                     }
                 }
             }
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [nodes, connections, past, future, selectedNodeId, undo, redo, duplicateNode, removeNode, handleSave, setShowExportModal]);
+    }, [nodes, connections, past, future, selectedNodeIds, undo, redo, duplicateNode, removeNodes, handleSave, setShowExportModal]);
 }

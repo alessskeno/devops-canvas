@@ -27,7 +27,7 @@ export interface Workspace {
 
 export interface CanvasNode {
     id: string;
-    type: string; // 'kind-cluster', 'postgres', 'redis', etc.
+    type: string; // 'postgres', 'redis', 'prometheus', etc.
     position: { x: number; y: number };
     data: ComponentConfig;
     selected?: boolean;
@@ -43,20 +43,7 @@ export interface Connection {
     animated?: boolean;
 }
 
-export interface KindClusterConfig {
-    name: string;
-    version: string;
-    topology: {
-        controlPlanes: number;
-        workers: number;
-    };
-    networking: {
-        enableIngress: boolean;
-        apiServerPort?: number;
-    };
-    mounts: Array<{ hostPath: string; containerPath: string }>;
-    advancedConfigNodeId?: string;
-}
+
 
 export interface AlertmanagerConfig {
     destination: 'discord' | 'telegram';
@@ -71,9 +58,8 @@ export interface AlertmanagerConfig {
 
 export interface ComponentConfig {
     label: string;
-    componentType: 'infrastructure' | 'database' | 'queue' | 'caching' | 'custom' | 'messaging' | 'analytics' | 'monitoring' | 'configuration';
+    componentType: 'databases' | 'cache' | 'storage' | 'proxy-gateway' | 'auth-security' | 'messaging' | 'search' | 'monitoring' | 'custom' | 'config';
     version?: string;
-    kindConfig?: KindClusterConfig;
     alertmanagerConfig?: AlertmanagerConfig;
     status?: 'idle' | 'starting' | 'running' | 'error' | 'stopped';
     ports?: Record<string, string | number>;
@@ -83,6 +69,20 @@ export interface ComponentConfig {
         disk?: string;
     };
     env?: Record<string, string>;
+
+    // Generic Docker Compose overrides
+    serviceName?: string;
+    image?: string;
+    tag?: string;
+    containerName?: string;
+    restartPolicy?: 'always' | 'on-failure' | 'unless-stopped' | 'no';
+    command?: string;
+    dependsOn?: string[];
+    portMappings?: string[]; // e.g., ["5432:5432", "8080:80"]
+    envVars?: Record<string, string>; // Preferred generic replacement for `env`
+    volumes?: { source: string; target: string; type: 'bind' | 'named' | 'tmpfs' }[];
+    networks?: string[];
+
     // Dynamic properties based on component type
     [key: string]: any;
 }
@@ -95,6 +95,8 @@ export interface ComponentDefinition {
     category: ComponentConfig['componentType'];
     color?: string; // Tailwind class string, e.g. "text-blue-500 bg-blue-100"
     defaultConfig: Partial<ComponentConfig>;
+    allowInput?: boolean;
+    allowOutput?: boolean;
 }
 
 export interface AuthResponse {

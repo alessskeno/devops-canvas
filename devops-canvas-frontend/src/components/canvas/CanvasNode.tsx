@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import { CanvasNode as NodeData } from '../../types';
-import { Database, Server, Box, Layers, Activity, HardDrive, BarChart2, FileText, Bell, Boxes, Container, Code } from 'lucide-react';
+import { Database, Server, Box, Layers, Activity, HardDrive, BarChart2, FileText, Bell, Boxes, Container, Code, Shield, Globe, Search, Key, Gauge, Network, Archive } from 'lucide-react';
 import { useCanvasStore } from '../../store/canvasStore';
 import { getComponentByType } from '../../utils/componentRegistry';
 import { validateConnection } from '../../utils/validation';
@@ -27,12 +27,21 @@ const IconMap: Record<string, any> = {
     'BarChart': BarChart2,
     'Bell': Bell,
     'FileText': FileText,
-    'Code': Code
+    'Code': Code,
+    'Shield': Shield,
+    'Globe': Globe,
+    'Search': Search,
+    'Key': Key,
+    'Gauge': Gauge,
+    'Network': Network,
+    'Archive': Archive
 };
 
 function CanvasNodeComponent({ node, scale, isSelected }: CanvasNodeProps) {
     const selectNode = useCanvasStore(s => s.selectNode);
-    const removeNode = useCanvasStore(s => s.removeNode);
+    const toggleNodeSelection = useCanvasStore(s => s.toggleNodeSelection);
+    const selectedNodeIds = useCanvasStore(s => s.selectedNodeIds);
+    const nodes = useCanvasStore(s => s.nodes);
     const updateNodePosition = useCanvasStore(s => s.updateNodePosition);
     const setDraftConnection = useCanvasStore(s => s.setDraftConnection);
     const addConnection = useCanvasStore(s => s.addConnection);
@@ -46,13 +55,15 @@ function CanvasNodeComponent({ node, scale, isSelected }: CanvasNodeProps) {
     const handleClick = (e: React.MouseEvent) => {
         e.stopPropagation();
         if (!isDragging.current) {
-            selectNode(node.id);
+            if (e.metaKey || e.ctrlKey) {
+                toggleNodeSelection(node.id);
+            } else {
+                selectNode(node.id);
+            }
         }
     };
 
-    // Simple drag implementation
     const handleMouseDown = (e: React.MouseEvent) => {
-        // Don't start drag if clicking on a port or if locked
         if ((e.target as HTMLElement).hasAttribute('data-port-type')) return;
         if (node.locked) {
             selectNode(node.id);
@@ -62,19 +73,26 @@ function CanvasNodeComponent({ node, scale, isSelected }: CanvasNodeProps) {
         e.stopPropagation();
         isDragging.current = false;
 
+        const draggingIds = selectedNodeIds.includes(node.id) ? selectedNodeIds : [node.id];
+
         const startX = e.clientX;
         const startY = e.clientY;
-        const startNodeX = node.position.x;
-        const startNodeY = node.position.y;
+
+        const startPositions = draggingIds.map((id) => {
+            const n = nodes.find((nd) => nd.id === id);
+            return n ? { id: n.id, x: n.position.x, y: n.position.y } : null;
+        }).filter(Boolean) as { id: string; x: number; y: number }[];
 
         const handleMouseMove = (moveEvent: MouseEvent) => {
             isDragging.current = true;
             const deltaX = (moveEvent.clientX - startX) / scale;
             const deltaY = (moveEvent.clientY - startY) / scale;
 
-            updateNodePosition(node.id, {
-                x: startNodeX + deltaX,
-                y: startNodeY + deltaY
+            startPositions.forEach(({ id, x, y }) => {
+                updateNodePosition(id, {
+                    x: x + deltaX,
+                    y: y + deltaY
+                });
             });
         };
 
@@ -170,7 +188,7 @@ function CanvasNodeComponent({ node, scale, isSelected }: CanvasNodeProps) {
             style={{
                 transform: `translate(${node.position.x}px, ${node.position.y}px)`,
                 position: 'absolute',
-                zIndex: node.selected ? 10 : 1,
+                zIndex: isSelected ? 10 : 1,
             }}
             className={`
                 canvas-node group w-80 bg-white dark:bg-slate-900 rounded-xl shadow-sm border-2 group transition-[box-shadow,border-color,background-color] duration-200 z-10 cursor-pointer select-none outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900

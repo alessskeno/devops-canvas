@@ -15,8 +15,20 @@ interface CanvasAreaProps {
     sendCursorMove: (x: number, y: number) => void;
 }
 
-export function CanvasArea({ runningNodeIds, onNodeExec, activeCursors, sendCursorMove }: CanvasAreaProps) {
+function setRef<T>(ref: React.Ref<T> | undefined, value: T | null) {
+    if (typeof ref === 'function') ref(value);
+    else if (ref) (ref as React.MutableRefObject<T | null>).current = value;
+}
+
+export const CanvasArea = React.forwardRef<HTMLDivElement, CanvasAreaProps>(function CanvasArea(
+    { runningNodeIds, onNodeExec, activeCursors, sendCursorMove },
+    forwardedRef
+) {
     const containerRef = useRef<HTMLDivElement>(null);
+    const mergeRef = (el: HTMLDivElement | null) => {
+        (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
+        setRef(forwardedRef, el);
+    };
     const mouseRef = useRef({ x: 0, y: 0 });
     const lastCursorSend = useRef(0);
 
@@ -27,12 +39,19 @@ export function CanvasArea({ runningNodeIds, onNodeExec, activeCursors, sendCurs
         removeConnection, addNode,
         contextMenu, setContextMenu,
         duplicateNode, toggleLockNode, removeNode,
-        setActivePanelTab, selectedNodeId
+        setActivePanelTab, selectedNodeIds, selectNodes, clearSelection
     } = useCanvasStore();
 
-    // Pan State
+    const spaceHeldRef = useRef(false);
+    const [spaceHeld, setSpaceHeld] = useState(false);
     const [isPanning, setIsPanning] = useState(false);
     const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
+    const [selectionBox, setSelectionBox] = useState<{
+        startX: number;
+        startY: number;
+        currentX: number;
+        currentY: number;
+    } | null>(null);
 
     // Local temp mouse pos for draft line rendering (avoiding store thrashing for high freq updates)
     const [tempMousePos, setTempMousePos] = useState({ x: 0, y: 0 });
@@ -47,7 +66,7 @@ export function CanvasArea({ runningNodeIds, onNodeExec, activeCursors, sendCurs
     const handleWheel = (e: WheelEvent) => {
         const zoomSensitivity = 0.001;
         const oldScale = scale;
-        const newScale = Math.min(Math.max(scale - e.deltaY * zoomSensitivity, 0.1), 5);
+        const newScale = Math.min(Math.max(scale - e.deltaY * zoomSensitivity, 0.55), 2);
 
         if (containerRef.current) {
             const rect = containerRef.current.getBoundingClientRect();
@@ -69,26 +88,33 @@ export function CanvasArea({ runningNodeIds, onNodeExec, activeCursors, sendCurs
     };
 
     const handleMouseDown = (e: React.MouseEvent) => {
-        // Prevent panning/interaction if clicking on a node or interactive element
         const target = e.target as HTMLElement;
         if (target.closest('.canvas-node') || target.closest('.node-interactive')) {
             return;
         }
 
-        // Pan with Left Click (hold) or Middle Click on background
-        if (e.button === 0 || e.button === 1) {
+        if (e.button === 1) {
             setIsPanning(true);
             setLastMousePos({ x: e.clientX, y: e.clientY });
+            return;
+        }
 
-            // Deselect callback (background click)
-            if (e.button === 0) {
-                selectNode(null);
+        if (e.button === 0) {
+            if (spaceHeldRef.current) {
+                setIsPanning(true);
+                setLastMousePos({ x: e.clientX, y: e.clientY });
+            } else {
+                setSelectionBox({
+                    startX: e.clientX,
+                    startY: e.clientY,
+                    currentX: e.clientX,
+                    currentY: e.clientY
+                });
             }
         }
     };
 
     const handleMouseMove = (e: React.MouseEvent) => {
-        // Always track mouse position in canvas coordinates
         if (containerRef.current) {
             const rect = containerRef.current.getBoundingClientRect();
             const canvasX = (e.clientX - rect.left - pan.x) / scale;
@@ -99,12 +125,24 @@ export function CanvasArea({ runningNodeIds, onNodeExec, activeCursors, sendCurs
                 setTempMousePos({ x: canvasX, y: canvasY });
             }
 
-            // Send Cursor Move (Throttled)
             const now = Date.now();
             if (now - lastCursorSend.current > 50) {
                 sendCursorMove(canvasX, canvasY);
                 lastCursorSend.current = now;
             }
+        }
+
+        if (selectionBox && containerRef.current) {
+            const rect = containerRef.current.getBoundingClientRect();
+            setSelectionBox((prev) =>
+                prev
+                    ? {
+                          ...prev,
+                          currentX: Math.max(rect.left, Math.min(rect.right, e.clientX)),
+                          currentY: Math.max(rect.top, Math.min(rect.bottom, e.clientY))
+                      }
+                    : null
+            );
         }
 
         if (isPanning) {
@@ -116,6 +154,47 @@ export function CanvasArea({ runningNodeIds, onNodeExec, activeCursors, sendCurs
     };
 
     const handleMouseUp = (e: React.MouseEvent) => {
+        if (selectionBox && containerRef.current) {
+            const rect = containerRef.current.getBoundingClientRect();
+            const { startX, startY, currentX, currentY } = selectionBox;
+            let minX = Math.min(startX, currentX);
+            let maxX = Math.max(startX, currentX);
+            let minY = Math.min(startY, currentY);
+            let maxY = Math.max(startY, currentY);
+
+            minX = Math.max(minX, rect.left);
+            maxX = Math.min(maxX, rect.right);
+            minY = Math.max(minY, rect.top);
+            maxY = Math.min(maxY, rect.bottom);
+
+            const w = maxX - minX;
+            const h = maxY - minY;
+
+            if (w < 5 || h < 5) {
+                clearSelection();
+            } else {
+                const toCanvas = (screenX: number, screenY: number) => ({
+                    x: (screenX - rect.left - pan.x) / scale,
+                    y: (screenY - rect.top - pan.y) / scale
+                });
+                const boxLeft = toCanvas(minX, minY).x;
+                const boxTop = toCanvas(minX, minY).y;
+                const boxRight = toCanvas(maxX, maxY).x;
+                const boxBottom = toCanvas(maxX, maxY).y;
+
+                const nodeWidth = 320;
+                const nodeHeight = 106;
+                const matchingIds = nodes.filter((node) => {
+                    const nx = node.position.x;
+                    const ny = node.position.y;
+                    const nodeRight = nx + nodeWidth;
+                    const nodeBottom = ny + nodeHeight;
+                    return !(nodeRight < boxLeft || nx > boxRight || nodeBottom < boxTop || ny > boxBottom);
+                }).map((n) => n.id);
+                selectNodes(matchingIds);
+            }
+            setSelectionBox(null);
+        }
         setIsPanning(false);
         if (draftConnection) {
             setTimeout(() => {
@@ -165,8 +244,6 @@ export function CanvasArea({ runningNodeIds, onNodeExec, activeCursors, sendCurs
         }
     };
 
-    // Wheel listener for zoom — passive:true for scroll performance
-    // CSS overflow:hidden + touch-action:none on container prevents default scroll
     useEffect(() => {
         const element = containerRef.current;
         if (element) {
@@ -179,11 +256,42 @@ export function CanvasArea({ runningNodeIds, onNodeExec, activeCursors, sendCurs
         };
     }, [handleWheel]);
 
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                spaceHeldRef.current = true;
+                setSpaceHeld(true);
+            }
+        };
+        const handleKeyUp = (e: KeyboardEvent) => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                spaceHeldRef.current = false;
+                setSpaceHeld(false);
+                setIsPanning(false);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        window.addEventListener('keyup', handleKeyUp);
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+            window.removeEventListener('keyup', handleKeyUp);
+        };
+    }, []);
+
+    const cursorClass =
+        isPanning ? 'cursor-grabbing' : spaceHeld ? 'cursor-grab' : 'cursor-default';
+
     return (
         <div
-            ref={containerRef}
-            className="flex-1 overflow-hidden relative bg-gray-50 dark:bg-slate-950 grid-bg cursor-default selection:bg-transparent"
-            style={{ touchAction: 'none' }}
+            ref={mergeRef}
+            className={`flex-1 overflow-hidden relative bg-gray-50 dark:bg-slate-950 grid-bg selection:bg-transparent select-none ${cursorClass}`}
+            style={{
+                touchAction: 'none',
+                backgroundSize: `${20 * scale}px ${20 * scale}px`,
+                backgroundPosition: `${pan.x}px ${pan.y}px`
+            }}
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
@@ -194,6 +302,33 @@ export function CanvasArea({ runningNodeIds, onNodeExec, activeCursors, sendCurs
         >
             {/* Cursor Overlay */}
             <CursorOverlay cursors={activeCursors} scale={scale} pan={pan} />
+
+            {/* Marquee selection rectangle (screen space, clamped to canvas) */}
+            {selectionBox && containerRef.current && (() => {
+                const rect = containerRef.current.getBoundingClientRect();
+                let minX = Math.min(selectionBox.startX, selectionBox.currentX);
+                let maxX = Math.max(selectionBox.startX, selectionBox.currentX);
+                let minY = Math.min(selectionBox.startY, selectionBox.currentY);
+                let maxY = Math.max(selectionBox.startY, selectionBox.currentY);
+                minX = Math.max(minX, rect.left);
+                maxX = Math.min(maxX, rect.right);
+                minY = Math.max(minY, rect.top);
+                maxY = Math.min(maxY, rect.bottom);
+                const w = Math.max(0, maxX - minX);
+                const h = Math.max(0, maxY - minY);
+                return (
+                    <div
+                        className="absolute pointer-events-none border-2 border-dashed border-blue-500 bg-blue-500/10 z-20"
+                        style={{
+                            left: minX - rect.left,
+                            top: minY - rect.top,
+                            width: w,
+                            height: h
+                        }}
+                        aria-hidden
+                    />
+                );
+            })()}
 
             {/* Transform Container - everything inside here scales/pans */}
             <div
@@ -248,7 +383,7 @@ export function CanvasArea({ runningNodeIds, onNodeExec, activeCursors, sendCurs
                         key={node.id}
                         node={node}
                         scale={scale}
-                        isSelected={selectedNodeId === node.id}
+                        isSelected={selectedNodeIds.includes(node.id)}
                     />
                 ))}
             </div>
@@ -288,4 +423,4 @@ export function CanvasArea({ runningNodeIds, onNodeExec, activeCursors, sendCurs
             </div>
         </div>
     );
-}
+});

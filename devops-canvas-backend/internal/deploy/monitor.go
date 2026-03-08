@@ -1,242 +1,193 @@
 package deploy
 
 import (
-    "encoding/json"
-    "log"
-    "os/exec"
-    "strconv"
-    "strings"
-    "time"
+	"encoding/json"
+	"log"
+	"os/exec"
+	"strconv"
+	"strings"
+	"time"
 
-    "devops-canvas-backend/internal/realtime"
+	"devops-canvas-backend/internal/realtime"
 )
 
 type ContainerStat struct {
-    Name      string `json:"Name"`
-    CPUPerc   string `json:"CPUPerc"`
-    MemUsage  string `json:"MemUsage"`
-    MemPerc   string `json:"MemPerc"`
-    NetIO     string `json:"NetIO"`
-    BlockIO   string `json:"BlockIO"`
-    PIDs      string `json:"PIDs"`
+	Name     string `json:"Name"`
+	CPUPerc  string `json:"CPUPerc"`
+	MemUsage string `json:"MemUsage"`
+	MemPerc  string `json:"MemPerc"`
+	NetIO    string `json:"NetIO"`
+	BlockIO  string `json:"BlockIO"`
+	PIDs     string `json:"PIDs"`
 }
 
 type WorkspaceStats struct {
-    Type        string                   `json:"type"`          // "workspace_stats"
-    WorkspaceID string                   `json:"workspace_id"`
-    Containers  []ContainerStat          `json:"containers"`
-    TotalCPU    float64                  `json:"total_cpu"`     // Sum of %
-    TotalMem    float64                  `json:"total_memory"`  // Estimated bytes/MB? Docker stats gives human readable "10MiB / 1GiB". Hard to parse properly without SDK.
-    // For now, let's just send the raw ContainerStats and let Frontend parse/display.
+	Type        string          `json:"type"` // "workspace_stats"
+	WorkspaceID string          `json:"workspace_id"`
+	Containers  []ContainerStat `json:"containers"`
+	TotalCPU    float64         `json:"total_cpu"`    // Sum of %
+	TotalMem    float64         `json:"total_memory"` // Estimated bytes/MB? Docker stats gives human readable "10MiB / 1GiB". Hard to parse properly without SDK.
+	// For now, let's just send the raw ContainerStats and let Frontend parse/display.
 }
 
 type DockerMonitor struct {
-    Hub *realtime.Hub
-    lastKnownWorkspaces map[string]bool
+	Hub                 *realtime.Hub
+	lastKnownWorkspaces map[string]bool
 }
 
 func NewDockerMonitor(hub *realtime.Hub) *DockerMonitor {
-    return &DockerMonitor{
-        Hub: hub,
-        lastKnownWorkspaces: make(map[string]bool),
-    }
+	return &DockerMonitor{
+		Hub:                 hub,
+		lastKnownWorkspaces: make(map[string]bool),
+	}
 }
 
 func (m *DockerMonitor) Start() {
-    ticker := time.NewTicker(1 * time.Second)
-    go func() {
-        for range ticker.C {
-            m.collectAndBroadcast()
-        }
-    }()
+	ticker := time.NewTicker(1 * time.Second)
+	go func() {
+		for range ticker.C {
+			m.collectAndBroadcast()
+		}
+	}()
 }
 
 func (m *DockerMonitor) collectAndBroadcast() {
-    // Fetch all stats as JSON
-    cmd := exec.Command("docker", "stats", "--format", "{{json .}}", "--no-stream")
-    output, err := cmd.Output()
-    if err != nil {
-        log.Printf("Error fetching docker stats: %v", err)
-        return
-    }
+	// Fetch all stats as JSON
+	cmd := exec.Command("docker", "stats", "--format", "{{json .}}", "--no-stream")
+	output, err := cmd.Output()
+	if err != nil {
+		log.Printf("Error fetching docker stats: %v", err)
+		return
+	}
 
-    lines := strings.Split(string(output), "\n")
-    workspaceMap := make(map[string][]ContainerStat)
-    currentWorkspaces := make(map[string]bool)
+	lines := strings.Split(string(output), "\n")
+	workspaceMap := make(map[string][]ContainerStat)
+	currentWorkspaces := make(map[string]bool)
 
-    // Mapping approach
-    nameToProject, err := m.getContainerProjectMapping()
-    if err != nil {
-        // Fallback or just continue, but map might be empty
-        nameToProject = make(map[string]string)
-    }
-    
-    for _, line := range lines {
-         if strings.TrimSpace(line) == "" { continue }
-         var stat ContainerStat
-         if err := json.Unmarshal([]byte(line), &stat); err != nil { continue }
-         
-         // 1. Check Docker Compose Project Label
-         project, ok := nameToProject[stat.Name]
-         if ok && project != "" {
-             workspaceMap[project] = append(workspaceMap[project], stat)
-             currentWorkspaces[project] = true
-         }
+	// Mapping approach
+	nameToProject, err := m.getContainerProjectMapping()
+	if err != nil {
+		// Fallback or just continue, but map might be empty
+		nameToProject = make(map[string]string)
+	}
 
-         // 2. Check for Kind Clusters (Naming Convention: ws-{id}-control-plane)
-         if strings.HasPrefix(stat.Name, "ws-") && strings.HasSuffix(stat.Name, "-control-plane") {
-             // Extract ID: ws-UUID-control-plane
-             parts := strings.Split(stat.Name, "-")
-             if len(parts) >= 2 {
-                 // Assumptions: ws-UUID-control-plane. UUID might contain dashes.
-                 // Safer: TrimPrefix "ws-" and TrimSuffix "-control-plane"
-                 wsID := strings.TrimSuffix(strings.TrimPrefix(stat.Name, "ws-"), "-control-plane")
-                 
-                 // Add the control plane itself
-                 workspaceMap[wsID] = append(workspaceMap[wsID], stat)
-                 currentWorkspaces[wsID] = true
-                 
-                 // Fetch Pods from inside the cluster
-                 m.appendKindPods(stat.Name, wsID, workspaceMap)
-             }
-         }
-    }
-    
-    // Broadcast per workspace (Active ones)
-    for wsID, stats := range workspaceMap {
-        var totalCPU float64
-        var totalMem float64
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		var stat ContainerStat
+		if err := json.Unmarshal([]byte(line), &stat); err != nil {
+			continue
+		}
 
-        for _, s := range stats {
-            totalCPU += parseCPUPercentage(s.CPUPerc)
-            totalMem += parseMemoryUsage(s.MemUsage)
-        }
+		// 1. Check Docker Compose Project Label
+		project, ok := nameToProject[stat.Name]
+		if ok && project != "" {
+			workspaceMap[project] = append(workspaceMap[project], stat)
+			currentWorkspaces[project] = true
+		}
+	}
 
-        msg := WorkspaceStats{
-            Type:        "workspace_stats",
-            WorkspaceID: wsID,
-            Containers:  stats,
-            TotalCPU:    totalCPU,
-            TotalMem:    totalMem,
-        }
-        
-        bytes, _ := json.Marshal(msg)
-        m.Hub.BroadcastToLocal(bytes)
-        
-        // Mark as known
-        m.lastKnownWorkspaces[wsID] = true
-    }
-    
-    // Check for Workspaces that disappeared (Transition to 0 containers)
-    for wsID := range m.lastKnownWorkspaces {
-        if !currentWorkspaces[wsID] {
-            // Workspace was active, now gone. Send empty stats.
-             msg := WorkspaceStats{
-                Type:        "workspace_stats",
-                WorkspaceID: wsID,
-                Containers:  []ContainerStat{},
-                TotalCPU:    0,
-                TotalMem:    0,
-            }
-            bytes, _ := json.Marshal(msg)
-            m.Hub.BroadcastToLocal(bytes)
-            
-            // Remove from known
-            delete(m.lastKnownWorkspaces, wsID)
-        }
-    }
-}
+	// Broadcast per workspace (Active ones)
+	for wsID, stats := range workspaceMap {
+		var totalCPU float64
+		var totalMem float64
 
-// appendKindPods runs kubectl inside the kind node and adds pods as virtual container stats
-func (m *DockerMonitor) appendKindPods(kindContainerName string, wsID string, workspaceMap map[string][]ContainerStat) {
-    // We use 'docker exec' to run kubectl inside the control plane.
-    // This avoids needing local kubectl or kubeconfig paths in this context.
-    // Cmd: kubectl get pods --all-namespaces --field-selector=status.phase=Running --no-headers -o custom-columns=NAME:.metadata.name
-    
-    cmd := exec.Command("docker", "exec", kindContainerName, "kubectl", "get", "pods", 
-        "--all-namespaces", 
-        "--field-selector=status.phase=Running", 
-        "--no-headers", 
-        "-o", "custom-columns=NAME:.metadata.name")
-        
-    output, err := cmd.Output()
-    if err != nil {
-        // Cluster might be starting up or unready
-        return
-    }
-    
-    podLines := strings.Split(string(output), "\n")
-    for _, podName := range podLines {
-        podName = strings.TrimSpace(podName)
-        if podName == "" { continue }
-        
-        // Create a virtual stat for the pod
-        // We set CPU/Mem to 0 or "N/A" since calculating them per pod from outside is hard without metrics-server
-        workspaceMap[wsID] = append(workspaceMap[wsID], ContainerStat{
-            Name:     podName, // Frontend will match this against expected "type-shortID"
-            CPUPerc:  "0%",
-            MemUsage: "0B / 0B",
-            NetIO:    "0B / 0B",
-            BlockIO:  "0B / 0B",
-            PIDs:     "1",
-        })
-    }
+		for _, s := range stats {
+			totalCPU += parseCPUPercentage(s.CPUPerc)
+			totalMem += parseMemoryUsage(s.MemUsage)
+		}
+
+		msg := WorkspaceStats{
+			Type:        "workspace_stats",
+			WorkspaceID: wsID,
+			Containers:  stats,
+			TotalCPU:    totalCPU,
+			TotalMem:    totalMem,
+		}
+
+		bytes, _ := json.Marshal(msg)
+		m.Hub.BroadcastToLocal(bytes)
+
+		// Mark as known
+		m.lastKnownWorkspaces[wsID] = true
+	}
+
+	// Check for Workspaces that disappeared (Transition to 0 containers)
+	for wsID := range m.lastKnownWorkspaces {
+		if !currentWorkspaces[wsID] {
+			// Workspace was active, now gone. Send empty stats.
+			msg := WorkspaceStats{
+				Type:        "workspace_stats",
+				WorkspaceID: wsID,
+				Containers:  []ContainerStat{},
+				TotalCPU:    0,
+				TotalMem:    0,
+			}
+			bytes, _ := json.Marshal(msg)
+			m.Hub.BroadcastToLocal(bytes)
+
+			// Remove from known
+			delete(m.lastKnownWorkspaces, wsID)
+		}
+	}
 }
 
 func parseCPUPercentage(s string) float64 {
-    // "0.05%"
-    s = strings.ReplaceAll(s, "%", "")
-    val, _ := strconv.ParseFloat(s, 64)
-    return val // Return as percentage (e.g. 0.05)
+	// "0.05%"
+	s = strings.ReplaceAll(s, "%", "")
+	val, _ := strconv.ParseFloat(s, 64)
+	return val // Return as percentage (e.g. 0.05)
 }
 
 func parseMemoryUsage(s string) float64 {
-    // "15.73MiB / 15.5GiB"
-    parts := strings.Split(s, " / ")
-    if len(parts) == 0 {
-        return 0
-    }
-    usageStr := parts[0] // "15.73MiB"
-    
-    // Normalize units to Bytes
-    var multiplier float64 = 1
-    if strings.Contains(usageStr, "GiB") {
-        multiplier = 1024 * 1024 * 1024
-        usageStr = strings.ReplaceAll(usageStr, "GiB", "")
-    } else if strings.Contains(usageStr, "MiB") {
-        multiplier = 1024 * 1024
-        usageStr = strings.ReplaceAll(usageStr, "MiB", "")
-    } else if strings.Contains(usageStr, "KiB") {
-        multiplier = 1024
-        usageStr = strings.ReplaceAll(usageStr, "KiB", "")
-    } else if strings.Contains(usageStr, "B") {
-        usageStr = strings.ReplaceAll(usageStr, "B", "")
-    }
+	// "15.73MiB / 15.5GiB"
+	parts := strings.Split(s, " / ")
+	if len(parts) == 0 {
+		return 0
+	}
+	usageStr := parts[0] // "15.73MiB"
 
-    val, _ := strconv.ParseFloat(strings.TrimSpace(usageStr), 64)
-    return val * multiplier
+	// Normalize units to Bytes
+	var multiplier float64 = 1
+	if strings.Contains(usageStr, "GiB") {
+		multiplier = 1024 * 1024 * 1024
+		usageStr = strings.ReplaceAll(usageStr, "GiB", "")
+	} else if strings.Contains(usageStr, "MiB") {
+		multiplier = 1024 * 1024
+		usageStr = strings.ReplaceAll(usageStr, "MiB", "")
+	} else if strings.Contains(usageStr, "KiB") {
+		multiplier = 1024
+		usageStr = strings.ReplaceAll(usageStr, "KiB", "")
+	} else if strings.Contains(usageStr, "B") {
+		usageStr = strings.ReplaceAll(usageStr, "B", "")
+	}
+
+	val, _ := strconv.ParseFloat(strings.TrimSpace(usageStr), 64)
+	return val * multiplier
 }
 
-
 func (m *DockerMonitor) getContainerProjectMapping() (map[string]string, error) {
-    cmd := exec.Command("docker", "ps", "--format", "{{.Names}}\t{{.Label \"com.docker.compose.project\"}}")
-    output, err := cmd.Output()
-    if err != nil {
-        return nil, err
-    }
-    
-    mapping := make(map[string]string)
-    lines := strings.Split(string(output), "\n")
-    for _, line := range lines {
-        if strings.TrimSpace(line) == "" { continue }
-        parts := strings.Split(line, "\t")
-        if len(parts) >= 2 {
-            name := strings.TrimSpace(parts[0])
-            project := strings.TrimSpace(parts[1])
-            if project != "" {
-                mapping[name] = project
-            }
-        }
-    }
-    return mapping, nil
+	cmd := exec.Command("docker", "ps", "--format", "{{.Names}}\t{{.Label \"com.docker.compose.project\"}}")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+
+	mapping := make(map[string]string)
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		parts := strings.Split(line, "\t")
+		if len(parts) >= 2 {
+			name := strings.TrimSpace(parts[0])
+			project := strings.TrimSpace(parts[1])
+			if project != "" {
+				mapping[name] = project
+			}
+		}
+	}
+	return mapping, nil
 }
