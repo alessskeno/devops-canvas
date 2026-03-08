@@ -4,7 +4,7 @@ import { useAuthStore } from '../../store/authStore';
 import { Button } from '../shared/Button';
 import { Input } from '../shared/Input';
 import { Loader2, ArrowRight } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 import api from '../../utils/api';
 
 export default function AcceptInvite() {

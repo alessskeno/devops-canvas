@@ -1,5 +1,5 @@
 import { useRef, useEffect } from 'react';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 import { useCanvasStore } from '../store/canvasStore';
 
 interface UseAutoSaveProps {

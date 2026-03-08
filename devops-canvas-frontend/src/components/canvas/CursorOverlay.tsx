@@ -1,15 +1,16 @@
 import React from 'react';
 import { m, LazyMotion, domAnimation, AnimatePresence } from 'framer-motion';
+import { useViewport } from '@xyflow/react';
 
 interface CursorProps {
     x: number;
     y: number;
     name: string;
-    scale: number;
-    pan: { x: number, y: number };
+    zoom: number;
+    panX: number;
+    panY: number;
 }
 
-// Generate color from string hash
 const stringToColor = (str: string) => {
     let hash = 0;
     for (let i = 0; i < str.length; i++) {
@@ -19,11 +20,10 @@ const stringToColor = (str: string) => {
     return '#' + '00000'.substring(0, 6 - c.length) + c;
 };
 
-const Cursor = ({ x, y, name, scale, pan }: CursorProps) => {
+const Cursor = ({ x, y, name, zoom, panX, panY }: CursorProps) => {
     const color = stringToColor(name);
-    // Calculated screen position: (canvas_pos * scale) + pan
-    const screenX = x * scale + pan.x;
-    const screenY = y * scale + pan.y;
+    const screenX = x * zoom + panX;
+    const screenY = y * zoom + panY;
 
     return (
         <m.div
@@ -64,11 +64,11 @@ const Cursor = ({ x, y, name, scale, pan }: CursorProps) => {
 
 interface CursorOverlayProps {
     cursors: { [key: string]: { x: number, y: number, name: string } };
-    scale: number;
-    pan: { x: number, y: number };
 }
 
-export const CursorOverlay: React.FC<CursorOverlayProps> = ({ cursors, scale, pan }) => {
+export const CursorOverlay: React.FC<CursorOverlayProps> = ({ cursors }) => {
+    const viewport = useViewport();
+
     return (
         <LazyMotion features={domAnimation}>
             <div className="absolute inset-0 pointer-events-none overflow-hidden z-50">
@@ -79,8 +79,9 @@ export const CursorOverlay: React.FC<CursorOverlayProps> = ({ cursors, scale, pa
                             x={cursor.x}
                             y={cursor.y}
                             name={cursor.name}
-                            scale={scale}
-                            pan={pan}
+                            zoom={viewport.zoom}
+                            panX={viewport.x}
+                            panY={viewport.y}
                         />
                     ))}
                 </AnimatePresence>

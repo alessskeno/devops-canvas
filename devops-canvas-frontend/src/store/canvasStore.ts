@@ -1,13 +1,12 @@
 import { create } from 'zustand';
 import { CanvasNode, Connection, ComponentConfig } from '../types';
 import { COMPONENT_CONFIG_SCHEMAS } from '../utils/componentConfigSchemas';
+import type { NodeChange } from '@xyflow/react';
 
-// Helper to remove connection references from node data
 const cleanupNodeConnection = (node: CanvasNode, detachedNodeId: string): CanvasNode => {
     const schema = COMPONENT_CONFIG_SCHEMAS[node.type];
     if (!schema) return node;
 
-    // Use JSON parse/stringify for deep clone to handle nested objects safely
     const data = JSON.parse(JSON.stringify(node.data));
     let changed = false;
 
@@ -17,7 +16,6 @@ const cleanupNodeConnection = (node: CanvasNode, detachedNodeId: string): Canvas
             let current: any = data;
             let validPath = true;
 
-            // Navigate to the parent object
             for (let i = 0; i < keys.length - 1; i++) {
                 if (!current[keys[i]]) {
                     validPath = false;
@@ -48,10 +46,6 @@ interface CanvasState {
     nodes: CanvasNode[];
     connections: Connection[];
     selectedNodeIds: string[];
-    scale: number;
-    pan: { x: number; y: number };
-    isDragging: boolean;
-    draftConnection: { sourceId: string; sourcePos: { x: number; y: number } } | null;
 
     // UI State
     contextMenu: { nodeId: string; x: number; y: number } | null;
@@ -59,6 +53,9 @@ interface CanvasState {
 
     past: CanvasHistoryState[];
     future: CanvasHistoryState[];
+
+    // React Flow change handler
+    handleNodeChanges: (changes: NodeChange[]) => void;
 
     // Actions
     addNode: (node: CanvasNode) => void;
@@ -77,11 +74,7 @@ interface CanvasState {
     addConnection: (connection: Connection) => void;
     removeConnection: (id: string) => void;
 
-    setTransform: (scale: number, pan: { x: number; y: number }) => void;
-    // ... rest ...
-    setDraftConnection: (draft: { sourceId: string; sourcePos: { x: number; y: number } } | null) => void;
     setContextMenu: (menu: { nodeId: string; x: number; y: number } | null) => void;
-    resetView: () => void;
     loadCanvas: (nodes: CanvasNode[], connections: Connection[]) => void;
 
     undo: () => void;
@@ -98,14 +91,59 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     nodes: [],
     connections: [],
     selectedNodeIds: [],
-    scale: 1,
-    pan: { x: 0, y: 0 },
-    isDragging: false,
-    draftConnection: null,
     contextMenu: null,
     activePanelTab: 'General',
     past: [],
     future: [],
+
+    handleNodeChanges: (changes) => set((state) => {
+        let newNodes = [...state.nodes];
+        let saveHistory = false;
+        let hasSelectChanges = false;
+
+        for (const change of changes) {
+            if (change.type === 'position') {
+                if (change.position) {
+                    const idx = newNodes.findIndex(n => n.id === change.id);
+                    if (idx !== -1) {
+                        newNodes[idx] = { ...newNodes[idx], position: change.position };
+                    }
+                }
+                if (change.dragging === false) {
+                    saveHistory = true;
+                }
+            } else if (change.type === 'select') {
+                const idx = newNodes.findIndex(n => n.id === change.id);
+                if (idx !== -1) {
+                    newNodes[idx] = { ...newNodes[idx], selected: change.selected };
+                }
+                hasSelectChanges = true;
+            } else if (change.type === 'dimensions' && (change as any).dimensions) {
+                const idx = newNodes.findIndex(n => n.id === change.id);
+                if (idx !== -1) {
+                    newNodes[idx] = { ...newNodes[idx], measured: (change as any).dimensions };
+                }
+            }
+        }
+
+        const newSelectedIds = newNodes.filter(n => n.selected).map(n => n.id);
+
+        const result: Partial<CanvasState> & Record<string, any> = {
+            nodes: newNodes,
+            selectedNodeIds: newSelectedIds,
+        };
+
+        if (hasSelectChanges) {
+            result.activePanelTab = 'General';
+        }
+
+        if (saveHistory) {
+            result.past = [...state.past, { nodes: state.nodes, connections: state.connections }];
+            result.future = [];
+        }
+
+        return result;
+    }),
 
     addNode: (node) => set((state) => ({
         past: [...state.past, { nodes: state.nodes, connections: state.connections }],
@@ -114,7 +152,6 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     })),
 
     removeNode: (id) => set((state) => {
-        // Find all connections involving this node to clean up references in other nodes
         const relatedConnections = state.connections.filter(c => c.source === id || c.target === id);
         let newNodes = state.nodes;
 
@@ -193,7 +230,6 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
 
     setContextMenu: (menu) => set({ contextMenu: menu }),
 
-    // Only save history if explicitly asked (e.g. on drag end), otherwise just update
     updateNodePosition: (id, position, saveToHistory = false) => set((state) => {
         const newState = {
             nodes: state.nodes.map((n) => n.id === id ? { ...n, position } : n)
@@ -209,38 +245,52 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     }),
 
     updateNodeData: (id, data) => set((state) => ({
-        // Data updates might want history too, but maybe less critical for prototype? Let's add it.
         past: [...state.past, { nodes: state.nodes, connections: state.connections }],
         future: [],
         nodes: state.nodes.map((n) => n.id === id ? { ...n, data: { ...n.data, ...data } } : n)
     })),
 
-    selectNode: (id) =>
-        set({
-            selectedNodeIds: id != null ? [id] : [],
-            activePanelTab: 'General'
-        }),
-    selectNodes: (ids) => set({ selectedNodeIds: ids, activePanelTab: 'General' }),
-    toggleNodeSelection: (id) =>
-        set((state) => {
-            const set = new Set(state.selectedNodeIds);
-            if (set.has(id)) set.delete(id);
-            else set.add(id);
-            return { selectedNodeIds: Array.from(set), activePanelTab: 'General' };
-        }),
-    clearSelection: () => set({ selectedNodeIds: [] }),
+    selectNode: (id) => set((state) => ({
+        selectedNodeIds: id != null ? [id] : [],
+        activePanelTab: 'General',
+        nodes: state.nodes.map(n => ({ ...n, selected: n.id === id }))
+    })),
+
+    selectNodes: (ids) => set((state) => {
+        const idSet = new Set(ids);
+        return {
+            selectedNodeIds: ids,
+            activePanelTab: 'General',
+            nodes: state.nodes.map(n => ({ ...n, selected: idSet.has(n.id) }))
+        };
+    }),
+
+    toggleNodeSelection: (id) => set((state) => {
+        const isSelected = state.selectedNodeIds.includes(id);
+        const newSelectedIds = isSelected
+            ? state.selectedNodeIds.filter(sid => sid !== id)
+            : [...state.selectedNodeIds, id];
+        const idSet = new Set(newSelectedIds);
+        return {
+            selectedNodeIds: newSelectedIds,
+            activePanelTab: 'General',
+            nodes: state.nodes.map(n => ({ ...n, selected: idSet.has(n.id) }))
+        };
+    }),
+
+    clearSelection: () => set((state) => ({
+        selectedNodeIds: [],
+        nodes: state.nodes.map(n => n.selected ? { ...n, selected: false } : n)
+    })),
 
     addConnection: (connection) => set((state) => {
-        // Prevent self-connections
         if (connection.source === connection.target) return state;
 
-        // Check if connection already exists
         const exists = state.connections.find(
             c => c.source === connection.source && c.target === connection.target
         );
         if (exists) return state;
 
-        // Prevent bidirectional connections (no A->B if B->A exists)
         const reverseExists = state.connections.find(
             c => c.source === connection.target && c.target === connection.source
         );
@@ -283,11 +333,6 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         };
     }),
 
-    setDraftConnection: (draft) => set({ draftConnection: draft }),
-    setTransform: (scale, pan) => set({ scale, pan }),
-
-    resetView: () => set({ scale: 1, pan: { x: 0, y: 0 } }),
-
     loadCanvas: (nodes, connections) => set({ nodes, connections, past: [], future: [], selectedNodeIds: [] }),
 
     undo: () => set((state) => {
@@ -325,7 +370,6 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
 
             const { nodes, connections } = response.data;
 
-            // Transform backend flat structure (position_x, position_y) to frontend nested structure (position: {x, y})
             const mappedNodes = (nodes || []).map((n: any) => ({
                 ...n,
                 position: {
@@ -354,12 +398,14 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
             const { nodes, connections } = get();
             const { default: api } = await import('../utils/api');
 
-            // Transform frontend nested structure to backend flat structure
-            const payloadNodes = nodes.map(n => ({
-                ...n,
-                position_x: n.position.x,
-                position_y: n.position.y
-            }));
+            const payloadNodes = nodes.map(n => {
+                const { measured, selected, ...rest } = n as any;
+                return {
+                    ...rest,
+                    position_x: n.position.x,
+                    position_y: n.position.y
+                };
+            });
 
             await api.put(`/workspaces/${workspaceId}/canvas`, {
                 nodes: payloadNodes,

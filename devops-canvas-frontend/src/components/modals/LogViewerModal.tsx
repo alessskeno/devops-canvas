@@ -1,11 +1,10 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Terminal } from '@xterm/xterm';
-import { FitAddon } from '@xterm/addon-fit';
+import { LazyLog, ScrollFollow } from '@melloware/react-logviewer';
 import { createPortal } from 'react-dom';
-import { Terminal as TerminalIcon, Maximize2, Minimize2, X, GripHorizontal } from 'lucide-react';
-import '@xterm/xterm/css/xterm.css';
+import { ScrollText, Maximize2, Minimize2, X, GripHorizontal, RefreshCw } from 'lucide-react';
+import api from '../../utils/api';
 
-interface TerminalModalProps {
+interface LogViewerModalProps {
     isOpen: boolean;
     onClose: () => void;
     workspaceId: string;
@@ -14,152 +13,76 @@ interface TerminalModalProps {
     componentType: string;
 }
 
-const MIN_W = 520;
-const MIN_H = 320;
+const MIN_W = 580;
+const MIN_H = 380;
 const HEADER_H = 40;
-
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
-
-function getTerminalWsUrl(workspaceId: string, componentId: string): string {
-    const wsBase = API_BASE.replace(/^http/, 'ws');
-    return `${wsBase}/deploy/${workspaceId}/terminal?component_id=${componentId}`;
-}
+const AUTO_REFRESH_MS = 5000;
 
 function centerRect() {
     return {
-        x: Math.max(0, (window.innerWidth - 840) / 2),
-        y: Math.max(0, (window.innerHeight - 520) / 2),
-        w: Math.min(840, window.innerWidth * 0.92),
-        h: Math.min(520, window.innerHeight * 0.85),
+        x: Math.max(0, (window.innerWidth - 900) / 2),
+        y: Math.max(0, (window.innerHeight - 560) / 2),
+        w: Math.min(900, window.innerWidth * 0.92),
+        h: Math.min(560, window.innerHeight * 0.85),
     };
 }
 
-const TERM_OPTIONS = {
-    cursorBlink: true,
-    fontSize: 14,
-    fontFamily: 'Menlo, Monaco, "Courier New", monospace',
-    theme: {
-        background: '#0f172a',
-        foreground: '#e2e8f0',
-        cursor: '#38bdf8',
-        cursorAccent: '#0f172a',
-        selectionBackground: '#334155',
-        black: '#1e293b',
-        brightBlack: '#475569',
-        red: '#f87171',
-        brightRed: '#fca5a5',
-        green: '#4ade80',
-        brightGreen: '#86efac',
-        yellow: '#facc15',
-        brightYellow: '#fde68a',
-        blue: '#60a5fa',
-        brightBlue: '#93c5fd',
-        magenta: '#c084fc',
-        brightMagenta: '#d8b4fe',
-        cyan: '#22d3ee',
-        brightCyan: '#67e8f9',
-        white: '#e2e8f0',
-        brightWhite: '#f8fafc',
-    },
-};
+function resolveWorkspaceId(provided?: string): string {
+    if (provided) return provided;
+    const match = window.location.pathname.match(/\/workspace\/([^/]+)/);
+    return match ? match[1] : '';
+}
 
-export function TerminalModal({ isOpen, onClose, workspaceId, componentId, componentName, componentType }: TerminalModalProps) {
-    const terminalElRef = useRef<HTMLDivElement>(null);
-    const xtermRef = useRef<Terminal | null>(null);
-    const fitAddonRef = useRef<FitAddon | null>(null);
-    const wsRef = useRef<WebSocket | null>(null);
+export function LogViewerModal({ isOpen, onClose, workspaceId, componentId, componentName, componentType }: LogViewerModalProps) {
+    const actualWorkspaceId = resolveWorkspaceId(workspaceId);
+
+    const [logText, setLogText] = useState<string>('');
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+    const refreshTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     const [rect, setRect] = useState(centerRect);
     const [isFullscreen, setIsFullscreen] = useState(false);
     const savedRect = useRef(rect);
     const [dragging, setDragging] = useState<null | { type: 'move' | 'resize-r' | 'resize-b' | 'resize-br'; startX: number; startY: number; startRect: typeof rect }>(null);
 
-    const doFit = useCallback(() => {
-        try { fitAddonRef.current?.fit(); } catch { /* not ready */ }
-    }, []);
-
-    // Create terminal, connect WebSocket -- runs once per modal open
-    useEffect(() => {
-        if (!isOpen || !terminalElRef.current) return;
-
-        const term = new Terminal(TERM_OPTIONS);
-        const fitAddon = new FitAddon();
-        term.loadAddon(fitAddon);
-        term.open(terminalElRef.current);
-        fitAddon.fit();
-        term.focus();
-
-        xtermRef.current = term;
-        fitAddonRef.current = fitAddon;
-
-        term.writeln(`\x1b[34m>\x1b[0m Connecting to \x1b[1m${componentName}\x1b[0m (${componentType})...`);
-
-        const wsUrl = getTerminalWsUrl(workspaceId, componentId);
-        const ws = new WebSocket(wsUrl);
-        ws.binaryType = 'arraybuffer';
-        wsRef.current = ws;
-
-        ws.onopen = () => {
-            term.writeln('\x1b[32m>\x1b[0m Connected.\r\n');
-            ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
-        };
-
-        ws.onmessage = (event) => {
-            if (typeof event.data === 'string') {
-                term.write(event.data);
+    const fetchLogs = useCallback(async () => {
+        if (!actualWorkspaceId) return;
+        setLoading(true);
+        setError('');
+        try {
+            const res = await api.get(`/deploy/${actualWorkspaceId}/logs?component_id=${componentId}`);
+            if (res.data?.logs && Array.isArray(res.data.logs)) {
+                setLogText(res.data.logs.join('\n'));
             } else {
-                term.write(new Uint8Array(event.data));
+                setLogText('No logs returned.');
             }
-        };
-
-        ws.onclose = () => {
-            term.writeln('\r\n\x1b[33m>\x1b[0m Connection closed.');
-        };
-
-        ws.onerror = () => {
-            term.writeln('\r\n\x1b[31m>\x1b[0m Connection error.');
-        };
-
-        term.onData((data) => {
-            if (ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ type: 'input', data }));
-            }
-        });
-
-        term.onResize((dims) => {
-            if (ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({ type: 'resize', cols: dims.cols, rows: dims.rows }));
-            }
-        });
-
-        let resizeTimeout: ReturnType<typeof setTimeout>;
-        const resizeObserver = new ResizeObserver(() => {
-            clearTimeout(resizeTimeout);
-            resizeTimeout = setTimeout(() => fitAddon.fit(), 60);
-        });
-        resizeObserver.observe(terminalElRef.current);
-
-        return () => {
-            clearTimeout(resizeTimeout);
-            resizeObserver.disconnect();
-            ws.close();
-            term.dispose();
-            wsRef.current = null;
-            xtermRef.current = null;
-            fitAddonRef.current = null;
-        };
-    }, [isOpen, workspaceId, componentId, componentName, componentType]);
-
-    // Re-fit on fullscreen toggle
-    useEffect(() => {
-        if (isOpen) {
-            const t = setTimeout(() => {
-                doFit();
-                xtermRef.current?.focus();
-            }, 80);
-            return () => clearTimeout(t);
+        } catch (err: any) {
+            setError(err.message || 'Failed to fetch logs');
+        } finally {
+            setLoading(false);
         }
-    }, [isFullscreen, isOpen, doFit]);
+    }, [actualWorkspaceId, componentId]);
+
+    // Fetch on open + auto-refresh
+    useEffect(() => {
+        if (!isOpen) return;
+        fetchLogs();
+        refreshTimerRef.current = setInterval(fetchLogs, AUTO_REFRESH_MS);
+        return () => {
+            if (refreshTimerRef.current) clearInterval(refreshTimerRef.current);
+        };
+    }, [isOpen, fetchLogs]);
+
+    // Reset state when closing
+    useEffect(() => {
+        if (!isOpen) {
+            setLogText('');
+            setError('');
+            setIsFullscreen(false);
+            setRect(centerRect());
+        }
+    }, [isOpen]);
 
     const toggleFullscreen = useCallback(() => {
         setIsFullscreen(prev => {
@@ -173,15 +96,13 @@ export function TerminalModal({ isOpen, onClose, workspaceId, componentId, compo
         });
     }, [rect]);
 
-    // Pointer-based drag: move and resize
+    // Pointer drag: move and resize
     useEffect(() => {
         if (!dragging) return;
-
         const onMove = (e: PointerEvent) => {
             const dx = e.clientX - dragging.startX;
             const dy = e.clientY - dragging.startY;
             const s = dragging.startRect;
-
             if (dragging.type === 'move') {
                 setRect(r => ({
                     ...r,
@@ -200,7 +121,6 @@ export function TerminalModal({ isOpen, onClose, workspaceId, componentId, compo
                 setRect(r => ({ ...r, w: newW, h: newH }));
             }
         };
-
         const onUp = () => setDragging(null);
         window.addEventListener('pointermove', onMove);
         window.addEventListener('pointerup', onUp);
@@ -223,10 +143,8 @@ export function TerminalModal({ isOpen, onClose, workspaceId, componentId, compo
 
     return createPortal(
         <>
-            {/* Backdrop */}
             <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px]" onClick={onClose} />
 
-            {/* Terminal panel */}
             <div
                 style={panelStyle}
                 className="flex flex-col rounded-xl overflow-hidden shadow-2xl shadow-black/60 border border-slate-700/60"
@@ -239,15 +157,23 @@ export function TerminalModal({ isOpen, onClose, workspaceId, componentId, compo
                 >
                     <div className="flex items-center gap-2 min-w-0">
                         {!isFullscreen && <GripHorizontal size={14} className="text-slate-500 shrink-0" />}
-                        <TerminalIcon size={15} className="text-sky-400 shrink-0" />
+                        <ScrollText size={15} className="text-emerald-400 shrink-0" />
                         <span className="text-xs font-semibold text-slate-300 truncate">
-                            {componentName}
+                            Logs: {componentName}
                         </span>
                         <span className="text-[10px] text-slate-500 font-mono truncate">
                             {componentType}
                         </span>
                     </div>
                     <div className="flex items-center gap-0.5">
+                        <button
+                            onClick={() => fetchLogs()}
+                            className="p-1.5 rounded text-slate-400 hover:text-white hover:bg-slate-700/60 transition-colors"
+                            title="Refresh logs"
+                            disabled={loading}
+                        >
+                            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+                        </button>
                         <button
                             onClick={toggleFullscreen}
                             className="p-1.5 rounded text-slate-400 hover:text-white hover:bg-slate-700/60 transition-colors"
@@ -265,24 +191,52 @@ export function TerminalModal({ isOpen, onClose, workspaceId, componentId, compo
                     </div>
                 </div>
 
-                {/* Terminal body */}
+                {/* Log body */}
                 <div className="flex-1 min-h-0 bg-[#0f172a] relative">
-                    <div ref={terminalElRef} className="absolute inset-0 p-1" />
+                    {error && (
+                        <div className="absolute top-2 left-3 right-3 z-10 text-xs text-red-400 bg-red-950/80 border border-red-800/60 px-3 py-1.5 rounded-md">
+                            {error}
+                        </div>
+                    )}
+                    <ScrollFollow
+                        startFollowing
+                        render={({ follow, onScroll }) => (
+                            <LazyLog
+                                text={logText || ' '}
+                                follow={follow}
+                                onScroll={onScroll}
+                                enableSearch
+                                extraLines={1}
+                                caseInsensitive
+                                selectableLines
+                                style={{
+                                    background: '#0f172a',
+                                    color: '#e2e8f0',
+                                    fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+                                    fontSize: 13,
+                                }}
+                                containerStyle={{
+                                    background: '#0f172a',
+                                    overflow: 'auto',
+                                }}
+                            />
+                        )}
+                    />
                 </div>
 
-                {/* Resize handles (only when not fullscreen) */}
+                {/* Resize handles */}
                 {!isFullscreen && (
                     <>
                         <div
-                            className="absolute top-10 right-0 w-2 bottom-2 cursor-ew-resize hover:bg-sky-500/20 transition-colors"
+                            className="absolute top-10 right-0 w-2 bottom-2 cursor-ew-resize hover:bg-emerald-500/20 transition-colors"
                             onPointerDown={(e) => startDrag('resize-r', e)}
                         />
                         <div
-                            className="absolute left-2 bottom-0 right-2 h-2 cursor-ns-resize hover:bg-sky-500/20 transition-colors"
+                            className="absolute left-2 bottom-0 right-2 h-2 cursor-ns-resize hover:bg-emerald-500/20 transition-colors"
                             onPointerDown={(e) => startDrag('resize-b', e)}
                         />
                         <div
-                            className="absolute right-0 bottom-0 w-4 h-4 cursor-nwse-resize hover:bg-sky-500/30 transition-colors rounded-tl-md"
+                            className="absolute right-0 bottom-0 w-4 h-4 cursor-nwse-resize hover:bg-emerald-500/30 transition-colors rounded-tl-md"
                             onPointerDown={(e) => startDrag('resize-br', e)}
                         />
                     </>

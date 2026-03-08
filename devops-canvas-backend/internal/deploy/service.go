@@ -3,6 +3,7 @@ package deploy
 import (
 	"context"
 	"encoding/json"
+	"log"
 
 	"devops-canvas-backend/internal/deploy/translator"
 	"devops-canvas-backend/internal/realtime"
@@ -328,6 +329,7 @@ func (s *Service) GenerateManifests(ctx context.Context, workspaceID string) (ma
 
 		manifests, err := s.generator.GenerateManifests(node, canvas.Nodes, canvas.Connections)
 		if err != nil {
+			log.Printf("[manifests] skipping node %s (type=%s): %v", node.ID, node.Type, err)
 			continue
 		}
 		if manifests == nil {

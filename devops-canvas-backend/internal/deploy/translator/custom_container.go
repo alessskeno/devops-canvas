@@ -3,7 +3,6 @@ package translator
 import (
     "encoding/json"
     "fmt"
-    "os"
     "path/filepath"
     "strings"
 
@@ -13,19 +12,44 @@ import (
 // CustomContainerConfig defines the expected JSON data from the frontend
 type CustomContainerConfig struct {
     CommonConfig
-    Label          string `json:"label"`
-    BuildContextID string `json:"buildContextId"`
-    ContainerPort  any    `json:"containerPort"`
-    HostPort       any    `json:"hostPort"`
-    EnvVars        string `json:"envVars"` // KEY=VALUE pairs, one per line
+    Label          string   `json:"label"`
+    BuildContextID string   `json:"buildContextId"`
+    PortMappings   []string `json:"portMappings"`
+    ContainerPort  any      `json:"containerPort"`
+    HostPort       any      `json:"hostPort"`
 }
 
 type CustomContainerTranslator struct{}
 
 func (t *CustomContainerTranslator) Translate(node models.Node, ctx TranslationContext) (*GeneratedManifests, error) {
-    var config CustomContainerConfig
-    if err := json.Unmarshal(node.Data, &config); err != nil {
+    // Use raw JSON map for flexible parsing — avoids type mismatches
+    // (e.g. envVars may be {} object or "KEY=VAL" string depending on frontend version)
+    var raw map[string]interface{}
+    if err := json.Unmarshal(node.Data, &raw); err != nil {
         return nil, fmt.Errorf("failed to parse custom-container config: %v", err)
+    }
+
+    // Also unmarshal into typed struct for typed fields
+    var config CustomContainerConfig
+    // Use a lenient approach: unmarshal what we can, ignore mismatches
+    _ = json.Unmarshal(node.Data, &config)
+
+    // Fallback for buildContextId from raw map
+    if config.BuildContextID == "" {
+        if id, _ := raw["buildContextId"].(string); id != "" {
+            config.BuildContextID = id
+        } else if id, _ := raw["buildContext"].(string); id != "" {
+            config.BuildContextID = id
+        }
+    }
+
+    label := config.Label
+    if label == "" {
+        if l, _ := raw["label"].(string); l != "" {
+            label = l
+        } else {
+            label = "Custom Container"
+        }
     }
 
     // Check Enabled status
@@ -35,34 +59,41 @@ func (t *CustomContainerTranslator) Translate(node models.Node, ctx TranslationC
 
     // Validate build context
     if config.BuildContextID == "" {
-        return nil, fmt.Errorf("custom container '%s': no build context uploaded. Please upload your source directory first", config.Label)
+        return nil, fmt.Errorf("custom container '%s': no build context uploaded. Please upload your source directory first", label)
     }
 
     contextDir := filepath.Join("/tmp/contexts", config.BuildContextID)
 
-    // Verify Dockerfile exists in the uploaded context
-    dockerfilePath := filepath.Join(contextDir, "Dockerfile")
-    if _, err := os.Stat(dockerfilePath); os.IsNotExist(err) {
-        return nil, fmt.Errorf("custom container '%s': no Dockerfile found in uploaded context. The source directory must contain a Dockerfile", config.Label)
+    // Parse ports: prefer portMappings, fall back to containerPort/hostPort (legacy)
+    var ports []string
+    if len(config.PortMappings) > 0 {
+        for _, p := range config.PortMappings {
+            p = strings.TrimSpace(p)
+            if p != "" {
+                ports = append(ports, p)
+            }
+        }
+    }
+    if len(ports) == 0 {
+        containerPort := fmt.Sprintf("%v", config.ContainerPort)
+        if containerPort == "" || containerPort == "<nil>" || containerPort == "0" {
+            containerPort = "8080"
+        }
+        hostPort := fmt.Sprintf("%v", config.HostPort)
+        if hostPort == "" || hostPort == "<nil>" || hostPort == "0" {
+            hostPort = containerPort
+        }
+        ports = []string{fmt.Sprintf("%s:%s", hostPort, containerPort)}
     }
 
-    // Parse ports
-    containerPort := fmt.Sprintf("%v", config.ContainerPort)
-    if containerPort == "" || containerPort == "<nil>" || containerPort == "0" {
-        containerPort = "8080"
-    }
-
-    hostPort := fmt.Sprintf("%v", config.HostPort)
-    if hostPort == "" || hostPort == "<nil>" || hostPort == "0" {
-        hostPort = containerPort
-    }
-
-    // Build environment variables
+    // Build environment variables from envVars (handle both map and string formats)
     env := make(map[string]string)
-
-    // Parse user-provided env vars
-    if config.EnvVars != "" {
-        for _, line := range strings.Split(config.EnvVars, "\n") {
+    if envObj, ok := raw["envVars"].(map[string]interface{}); ok {
+        for k, v := range envObj {
+            env[k] = fmt.Sprintf("%v", v)
+        }
+    } else if envStr, ok := raw["envVars"].(string); ok && envStr != "" {
+        for _, line := range strings.Split(envStr, "\n") {
             line = strings.TrimSpace(line)
             if line == "" || strings.HasPrefix(line, "#") {
                 continue
@@ -74,18 +105,15 @@ func (t *CustomContainerTranslator) Translate(node models.Node, ctx TranslationC
         }
     }
 
-    // Auto-inject connection info for connected dependencies (depends_on is applied centrally in service.go)
+    // Auto-inject connection info for connected dependencies
     connectedNodes, _ := ctx.FindConnectedNodes(node.ID)
 
     for _, dep := range connectedNodes {
-        // Skip infrastructure nodes
         if dep.Type == "kind-cluster" || dep.Type == "docker-compose" || dep.Type == "file" || dep.Type == "custom-container" {
             continue
         }
 
         depServiceName := fmt.Sprintf("%s-%s", dep.Type, dep.ID[:4])
-
-        // Auto-inject common connection environment variables
         upperType := strings.ToUpper(strings.ReplaceAll(dep.Type, "-", "_"))
 
         switch dep.Type {
@@ -170,19 +198,15 @@ func (t *CustomContainerTranslator) Translate(node models.Node, ctx TranslationC
             env[upperType+"_HOST"] = depServiceName
 
         default:
-            // Generic: just set HOST
             env[upperType+"_HOST"] = depServiceName
         }
     }
 
-    // Build the ComposeService (DependsOn is set centrally from canvas connections in service.go)
     service := &ComposeService{
         Build: &ComposeBuild{
             Context: contextDir,
         },
-        Ports: []string{
-            fmt.Sprintf("%s:%s", hostPort, containerPort),
-        },
+        Ports:       ports,
         Environment: env,
         Restart:     "unless-stopped",
     }

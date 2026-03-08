@@ -1,11 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import {
-    Search, Database, Box, Layers, Archive, Activity, BarChart2,
-    Star, FileText, Bell, Boxes, Container, Code, ChevronDown,
-    Shield, Globe, Key, Gauge, Network,
+    Search, Database, Layers, Archive, Activity, ChevronDown,
+    Shield, Globe, FileText, Code, Gauge, Star,
     Search as SearchIcon
 } from 'lucide-react';
 import { COMPONENT_REGISTRY } from '../../utils/componentRegistry';
+import { getComponentIcon } from '../../utils/componentIcons';
 import { ComponentDefinition, ComponentConfig } from '../../types';
 
 // ─── Category definitions with display order ──────────────────────────
@@ -25,27 +25,6 @@ const CATEGORY_SECTIONS: {
         { id: 'custom', label: 'CUSTOM', icon: Code },
         { id: 'config', label: 'CONFIG', icon: FileText },
     ];
-
-// Map registry icon strings to Lucide components
-const IconMap: Record<string, React.ElementType> = {
-    'Container': Container,
-    'Box': Box,
-    'Boxes': Boxes,
-    'Database': Database,
-    'Layers': Layers,
-    'Activity': Activity,
-    'BarChart': BarChart2,
-    'FileText': FileText,
-    'Bell': Bell,
-    'Code': Code,
-    'Shield': Shield,
-    'Globe': Globe,
-    'Search': SearchIcon,
-    'Key': Key,
-    'Gauge': Gauge,
-    'Network': Network,
-    'Archive': Archive,
-};
 
 export function ComponentLibrary() {
     const [filter, setFilter] = useState('');
@@ -132,7 +111,7 @@ export function ComponentLibrary() {
                             >
                                 <div className="px-3 pb-2 space-y-1.5">
                                     {components.map((component) => {
-                                        const CompIcon = IconMap[component.icon] || Database;
+                                        const CompIcon = getComponentIcon(component.type);
                                         return (
                                             <div
                                                 key={component.type}
@@ -141,7 +120,7 @@ export function ComponentLibrary() {
                                                 className="group relative flex items-center p-3 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-lg hover:shadow-md hover:border-blue-400 dark:hover:border-blue-500 cursor-grab active:cursor-grabbing transition-all transform hover:-translate-y-0.5"
                                             >
                                                 {/* Icon Box */}
-                                                <div className={`w-10 h-10 flex items-center justify-center rounded-lg shrink-0 mr-3 ${component.color || 'bg-blue-50 text-blue-600 dark:bg-gray-700 dark:text-blue-400'}`}>
+                                                <div className={`w-10 h-10 flex items-center justify-center rounded-lg shrink-0 mr-3 [&_svg]:w-5 [&_svg]:h-5 ${component.color || 'bg-blue-50 text-blue-600 dark:bg-gray-700 dark:text-blue-400'}`}>
                                                     <CompIcon size={20} />
                                                 </div>
 

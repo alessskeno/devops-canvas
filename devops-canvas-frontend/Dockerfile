@@ -6,8 +6,8 @@ WORKDIR /app
 # Copy package.json only to force fresh lockfile generation compatible with container
 COPY package.json ./
 
-# Install dependencies
-RUN npm install
+# Install dependencies (--legacy-peer-deps for react-xtermjs peer @xterm/xterm ^5.5.0 vs project ^6.0.0)
+RUN npm install --legacy-peer-deps
 
 # Copy source code
 COPY . .

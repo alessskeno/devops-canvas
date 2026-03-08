@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { MotionConfig, useReducedMotion } from "framer-motion";
 import { createBrowserRouter, RouterProvider, Navigate, Outlet } from 'react-router-dom';
-import { Toaster, useToasterStore, toast } from 'react-hot-toast';
+import { Toaster } from 'sonner';
 import { LoginPage } from './components/auth/LoginPage';
 import AcceptInvite from './components/auth/AcceptInvite';
 import { AdminSetup } from './components/auth/AdminSetup';
@@ -17,24 +17,15 @@ import { useDarkMode } from './hooks/useDarkMode';
 const RootLayout = () => {
   useDarkMode(); // Initialise theme
   const checkStatus = useAuthStore((state: any) => state.checkSystemStatus);
-  const { toasts } = useToasterStore();
-  const TOAST_LIMIT = 3;
 
   useEffect(() => { checkStatus(); }, []);
-
-  useEffect(() => {
-    toasts
-      .filter((t) => t.visible)
-      .filter((_, i) => i >= TOAST_LIMIT)
-      .forEach((t) => toast.dismiss(t.id));
-  }, [toasts]);
 
   // Ensure accessibility hook is used
   useReducedMotion();
 
   return (
     <MotionConfig reducedMotion="user">
-      <Toaster position="top-center" containerStyle={{ top: 20 }} toastOptions={{ duration: 3000 }} />
+      <Toaster position="top-center" richColors toastOptions={{ duration: 3000 }} />
       <Outlet />
     </MotionConfig>
   );

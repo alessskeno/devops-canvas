@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Upload, X } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 import { Button } from '../shared/Button';
+import { CodeEditor } from '../shared/CodeEditor';
 
 interface ImportModalProps {
     isOpen: boolean;
@@ -30,6 +31,12 @@ export function ImportModal({
     onFileChange,
     onImportText
 }: ImportModalProps) {
+    const [pasteText, setPasteText] = useState('');
+
+    useEffect(() => {
+        if (isOpen) setPasteText('');
+    }, [isOpen]);
+
     if (!isOpen) return null;
 
     return (
@@ -43,7 +50,7 @@ export function ImportModal({
                 <div className="p-6 flex-1 overflow-hidden flex flex-col space-y-4">
                     {/* Drag Drop Area */}
                     <div
-                        className={`flex-1 border-2 border-dashed rounded-lg flex flex-col items-center justify-center transition-colors ${dragActive ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-slate-300 dark:border-slate-700'}`}
+                        className={`flex-1 min-h-[180px] border-2 border-dashed rounded-lg flex flex-col items-center justify-center transition-colors p-8 ${dragActive ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-slate-300 dark:border-slate-700'}`}
                         onDragEnter={onDragEnter}
                         onDragLeave={onDragLeave}
                         onDragOver={onDragOver}
@@ -78,20 +85,25 @@ export function ImportModal({
                         </div>
                     </div>
 
-                    <textarea
-                        id="import-textarea"
-                        className="flex-1 w-full p-3 bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-lg font-mono text-sm text-gray-600 dark:text-gray-300 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                        placeholder='Paste your workspace JSON or YAML here...'
-                    />
+                    <div className="flex-1 min-h-[220px] flex flex-col overflow-hidden">
+                        <CodeEditor
+                            value={pasteText}
+                            onChange={setPasteText}
+                            language="yaml"
+                            readOnly={false}
+                            height={220}
+                            className="flex-1 border border-gray-200 dark:border-slate-700"
+                        />
+                    </div>
                 </div>
 
                 <div className="p-4 border-t border-gray-100 dark:border-slate-800 flex justify-end gap-2">
                     <Button variant="secondary" onClick={onClose}>Cancel</Button>
                     <Button onClick={async () => {
-                        const textarea = document.getElementById('import-textarea') as HTMLTextAreaElement;
-                        if (textarea.value) {
+                        if (pasteText.trim()) {
                             try {
-                                await onImportText(textarea.value);
+                                await onImportText(pasteText.trim());
+                                onClose();
                             } catch (e) {
                                 toast.error("Invalid JSON or YAML format.");
                             }

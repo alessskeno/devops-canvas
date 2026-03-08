@@ -11,6 +11,12 @@ export interface NodeEditorState {
         componentName: string;
         componentType: string;
     } | null;
+    logViewerConfig: {
+        isOpen: boolean;
+        componentId: string;
+        componentName: string;
+        componentType: string;
+    } | null;
     lastSaved: Date | null;
     isAutoSaving: boolean;
     hasUnsavedChanges: boolean;
@@ -23,6 +29,7 @@ export type NodeEditorAction =
     | { type: 'SET_SHOW_UNSAVED_MODAL'; payload: boolean }
     | { type: 'SET_SHOW_IMPORT_MODAL'; payload: boolean }
     | { type: 'SET_TERMINAL_CONFIG'; payload: NodeEditorState['terminalConfig'] }
+    | { type: 'SET_LOG_VIEWER_CONFIG'; payload: NodeEditorState['logViewerConfig'] }
     | { type: 'SET_LAST_SAVED'; payload: Date | null }
     | { type: 'SET_IS_AUTO_SAVING'; payload: boolean }
     | { type: 'SET_HAS_UNSAVED_CHANGES'; payload: boolean }
@@ -34,6 +41,7 @@ export const initialState: NodeEditorState = {
     showUnsavedModal: false,
     showImportModal: false,
     terminalConfig: null,
+    logViewerConfig: null,
     lastSaved: null,
     isAutoSaving: false,
     hasUnsavedChanges: false,
@@ -52,6 +60,8 @@ export function nodeEditorReducer(state: NodeEditorState, action: NodeEditorActi
             return { ...state, showImportModal: action.payload };
         case 'SET_TERMINAL_CONFIG':
             return { ...state, terminalConfig: action.payload };
+        case 'SET_LOG_VIEWER_CONFIG':
+            return { ...state, logViewerConfig: action.payload };
         case 'SET_LAST_SAVED':
             return { ...state, lastSaved: action.payload };
         case 'SET_IS_AUTO_SAVING':

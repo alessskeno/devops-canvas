@@ -182,7 +182,7 @@ function FolderUploadField({ field, value, onChange, isLocked, nodeId, workspace
                 setErrorMessage('No Dockerfile found in the selected directory root.');
             } else {
                 setUploadState('success');
-                onChange('buildContextId', result.buildContextId);
+                onChange(field.key, result.buildContextId);
             }
         } catch (err: any) {
             setUploadState('error');

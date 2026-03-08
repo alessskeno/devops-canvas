@@ -16,7 +16,7 @@ import { Button } from '../shared/Button';
 import { Input } from '../shared/Input';
 import { useTeamStore, TeamMember } from '../../store/teamStore';
 import { useAuthStore } from '../../store/authStore';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 import { RoleBadge } from './RoleBadge';
 
 

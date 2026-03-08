@@ -4,7 +4,7 @@ import { useAuthStore } from '../../store/authStore';
 import { Button } from '../shared/Button';
 import { Input } from '../shared/Input';
 import { Layers } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 
 export function AdminSetup() {
     const navigate = useNavigate();

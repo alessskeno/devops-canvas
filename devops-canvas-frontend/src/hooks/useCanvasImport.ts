@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 import yaml from 'js-yaml';
 import { CanvasNode, Connection } from '../types';
 

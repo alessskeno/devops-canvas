@@ -7,8 +7,6 @@ interface CanvasNodeHeaderProps {
     definition: any;
     DisplayIcon: any;
     iconColorClass: string;
-    onPortMouseDown: (e: React.MouseEvent, type: 'input' | 'output') => void;
-    onPortMouseUp: (e: React.MouseEvent, type: 'input' | 'output') => void;
 }
 
 export function CanvasNodeHeader({
@@ -16,8 +14,6 @@ export function CanvasNodeHeader({
     definition,
     DisplayIcon,
     iconColorClass,
-    onPortMouseDown,
-    onPortMouseUp
 }: CanvasNodeHeaderProps) {
     return (
         <div className="p-3 flex items-center gap-3 border-b border-gray-100 dark:border-slate-800 relative">
@@ -31,8 +27,10 @@ export function CanvasNodeHeader({
                 <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate leading-tight">
                     {node.data.label}
                 </h3>
-                <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider truncate mt-0.5">
-                    {definition?.name || node.type}
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 font-mono truncate mt-0.5" title={node.data.image != null ? `${node.data.image}:${node.data.tag ?? 'latest'}` : undefined}>
+                    {node.data.image != null && String(node.data.image).trim() !== ''
+                        ? `${node.data.image}:${node.data.tag ?? 'latest'}`
+                        : (definition?.name || node.type)}
                 </p>
             </div>
 
@@ -40,45 +38,6 @@ export function CanvasNodeHeader({
                 <div className="text-slate-400 dark:text-slate-500 mr-1" title="Node Locked">
                     <Lock size={14} />
                 </div>
-            )}
-
-            {/* Port Handles - Positioned on the separator line */}
-            {/* Input Port (Left) */}
-            {definition?.allowInput !== false && (
-                <div
-                    className="absolute -left-[7px] top-[calc(100%+1px)] -translate-y-1/2 w-3.5 h-3.5 bg-white dark:bg-slate-400 border-2 border-slate-200 dark:border-slate-950 rounded-full hover:bg-blue-500 hover:scale-125 transition-all z-20 cursor-crosshair shadow-md node-interactive"
-                    title="Input"
-                    data-port-type="input"
-                    data-node-id={node.id}
-                    role="button"
-                    tabIndex={0}
-                    aria-label="Input Port"
-                    onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                        }
-                    }}
-                    onMouseUp={(e) => onPortMouseUp(e, 'input')}
-                ></div>
-            )}
-
-            {/* Output Port (Right) */}
-            {definition?.allowOutput !== false && (
-                <div
-                    className="absolute -right-[7px] top-[calc(100%+1px)] -translate-y-1/2 w-3.5 h-3.5 bg-white dark:bg-slate-400 border-2 border-slate-200 dark:border-slate-950 rounded-full hover:bg-blue-500 hover:scale-125 transition-all z-20 cursor-crosshair shadow-md node-interactive"
-                    title="Output"
-                    data-port-type="output"
-                    data-node-id={node.id}
-                    role="button"
-                    tabIndex={0}
-                    aria-label="Output Port"
-                    onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                        }
-                    }}
-                    onMouseDown={(e) => onPortMouseDown(e, 'output')}
-                ></div>
             )}
         </div>
     );

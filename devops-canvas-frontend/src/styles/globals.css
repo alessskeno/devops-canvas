@@ -57,3 +57,51 @@
     stroke-dashoffset: -10;
   }
 }
+
+/* React Flow overrides: strip default node styling so our custom cards render cleanly */
+.react-flow__node {
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    font-size: inherit;
+    color: inherit;
+    width: auto;
+    text-align: inherit;
+}
+
+.react-flow__node.selected,
+.react-flow__node:focus,
+.react-flow__node:focus-visible {
+    box-shadow: none;
+    outline: none;
+}
+
+/* React Flow background: solid base for readability when panning */
+.react-flow__background {
+    background-color: #f9fafb;
+}
+
+.dark .react-flow__background {
+    background-color: #020617;
+}
+
+/* Lower dot intensity to reduce eye distraction; readable when moving */
+:root {
+    --canvas-dot-color: #d1d5db;
+}
+
+.dark {
+    --canvas-dot-color: #475569;
+}
+
+.react-flow__background-pattern.dots {
+    fill: var(--canvas-dot-color);
+    opacity: 0.85;
+}
+
+/* Ensure pane cursor is a normal pointer when not connecting */
+.react-flow__pane {
+    cursor: default;
+}

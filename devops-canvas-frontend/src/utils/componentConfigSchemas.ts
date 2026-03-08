@@ -149,13 +149,11 @@ export const COMPONENT_CONFIG_SCHEMAS: Record<string, ConfigField[]> = {
     ],
     'custom-container': [
         {
-            key: 'buildContext',
+            key: 'buildContextId',
             label: 'Source Directory',
             type: 'folder-upload' as any,
             helpText: 'Upload the folder containing your Dockerfile and source code'
-        },
-        { key: 'containerPort', label: 'Container Port', type: 'number', defaultValue: 8080, helpText: 'Port your app listens on inside the container' },
-        { key: 'hostPort', label: 'Host Port', type: 'number', defaultValue: 8080, helpText: 'Port exposed on the host machine' }
+        }
     ],
     'mongodb': [
                         { key: 'database', label: 'Database Name', type: 'text', defaultValue: 'app_db' },

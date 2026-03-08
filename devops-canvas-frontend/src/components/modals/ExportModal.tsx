@@ -1,10 +1,11 @@
-import React, { useReducer, useEffect } from 'react';
+import React, { useReducer } from 'react';
 import yaml from 'js-yaml';
 import { Modal } from '../shared/Modal';
 import { Button } from '../shared/Button';
 import { Toggle } from '../shared/Toggle';
-import { Copy, Download, Share2, Eye, Cloud } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { CodeEditor } from '../shared/CodeEditor';
+import { Copy, Download, Share2, Eye } from 'lucide-react';
+import { toast } from 'sonner';
 import { useCanvasStore } from '../../store/canvasStore';
 import { generateConfig } from '../../utils/exportConfig';
 import api from '../../utils/api';
@@ -155,10 +156,13 @@ export function ExportModal({ isOpen, onClose }: ExportModalProps) {
                             />
                         </div>
                         <div className="relative">
-                            <pre className="bg-gray-900 text-gray-300 p-4 rounded-lg font-mono text-xs overflow-auto max-h-96">
-                                {configContent}
-                            </pre>
-                            <button onClick={handleCopy} className="absolute top-2 right-2 p-1.5 bg-gray-800 text-gray-400 hover:text-white rounded">
+                            <CodeEditor
+                                value={configContent}
+                                language={state.format}
+                                readOnly
+                                height={380}
+                            />
+                            <button onClick={handleCopy} className="absolute top-2 right-2 p-1.5 bg-gray-800 text-gray-400 hover:text-white rounded z-10">
                                 <Copy size={14} />
                             </button>
                         </div>
@@ -172,10 +176,13 @@ export function ExportModal({ isOpen, onClose }: ExportModalProps) {
                         </div>
 
                         <div className="relative">
-                            <pre className="bg-gray-900 text-gray-300 p-4 rounded-lg font-mono text-xs overflow-auto max-h-96 whitespace-pre-wrap">
-                                {getManifestContent()}
-                            </pre>
-                            <button onClick={handleCopy} className="absolute top-2 right-2 p-1.5 bg-gray-800 text-gray-400 hover:text-white rounded">
+                            <CodeEditor
+                                value={getManifestContent()}
+                                language="yaml"
+                                readOnly
+                                height={380}
+                            />
+                            <button onClick={handleCopy} className="absolute top-2 right-2 p-1.5 bg-gray-800 text-gray-400 hover:text-white rounded z-10">
                                 <Copy size={14} />
                             </button>
                         </div>

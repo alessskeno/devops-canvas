@@ -32,6 +32,7 @@ export interface CanvasNode {
     data: ComponentConfig;
     selected?: boolean;
     locked?: boolean;
+    measured?: { width?: number; height?: number };
 }
 
 export interface Connection {

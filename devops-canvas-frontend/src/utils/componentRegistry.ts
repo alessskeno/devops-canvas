@@ -347,8 +347,7 @@ export const COMPONENT_REGISTRY: ComponentDefinition[] = [
         defaultConfig: {
             label: 'My App',
             buildContextId: '',
-            containerPort: 8080,
-            hostPort: 8080,
+            portMappings: ['8080:8080'],
             envVars: {}
         },
         allowInput: true,

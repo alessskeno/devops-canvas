@@ -5,12 +5,11 @@ import { Button } from '../shared/Button';
 import { Input } from '../shared/Input';
 import { Select } from '../shared/Select';
 import { Toggle } from '../shared/Toggle';
-import { X, Trash2, Copy, ChevronDown, ChevronRight, Settings, Server, Key, Wrench, Terminal } from 'lucide-react';
+import { X, Trash2, Copy, ChevronDown, ChevronRight, Settings, Server, Key, Wrench } from 'lucide-react';
 import { COMPONENT_REGISTRY } from '../../utils/componentRegistry';
 import { COMPONENT_CONFIG_SCHEMAS, ConfigField } from '../../utils/componentConfigSchemas';
 
 import { AlertmanagerConfigForm } from './AlertmanagerConfigForm';
-import { LogViewer } from './LogViewer';
 import { ConfigFieldRenderer } from './ConfigFieldRenderer';
 import api from '../../utils/api';
 
@@ -73,6 +72,8 @@ export function ConfigPanel() {
     }, [selectedNode?.type]);
 
     if (selectedNodeIds.length === 0) return null;
+
+    if (selectedNode?.type === 'file') return null;
 
     if (selectedNodeIds.length > 1) {
         const allLocked = selectedNodes.every(n => n.locked);
@@ -183,7 +184,6 @@ export function ConfigPanel() {
         { id: 'Ports', icon: <Server size={18} />, label: 'Port Mappings' },
         { id: 'EnvVars', icon: <Key size={18} />, label: 'Environment Variables' },
         { id: 'Config', icon: <Wrench size={18} />, label: 'Tool Options' },
-        { id: 'Logs', icon: <Terminal size={18} />, label: 'Logs' },
     ];
 
     return (
@@ -530,9 +530,6 @@ export function ConfigPanel() {
                         </div>
                     )}
 
-                    {currentTab === 'Logs' && (
-                        <LogViewer workspaceId={workspaceId || selectedNode.id} componentId={selectedNode.id} />
-                    )}
                 </div>
             </div>
         </div>

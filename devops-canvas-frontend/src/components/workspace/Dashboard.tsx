@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { dashboardReducer, initialState, type DashboardState, type DashboardAction } from './dashboardReducer';
 import { useNavigate, Link } from 'react-router-dom';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 import { useWorkspaceStore } from '../../store/workspaceStore';
 import { useAuthStore } from '../../store/authStore';
 import { WorkspaceCard } from './WorkspaceCard';

@@ -7,7 +7,7 @@ import { Toggle } from '../shared/Toggle';
 import { useDarkMode } from '../../hooks/useDarkMode';
 
 import { useAuthStore } from '../../store/authStore';
-import toast from 'react-hot-toast';
+import { toast } from 'sonner';
 
 const GeneralSettings = () => {
     const user = useAuthStore((state) => state.user);
