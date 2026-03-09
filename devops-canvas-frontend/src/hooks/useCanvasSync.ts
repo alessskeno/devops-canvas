@@ -16,6 +16,9 @@ interface UseCanvasSyncProps {
     connections: any[];
 }
 
+const stripVolatile = (nodes: any[]) =>
+    nodes.map(({ selected, measured, dragging, position_x, position_y, ...rest }: any) => rest);
+
 export function useCanvasSync({
     workspaceId,
     fetchCanvas,
@@ -32,6 +35,12 @@ export function useCanvasSync({
 }: UseCanvasSyncProps) {
     const isRemoteUpdate = useRef(false);
     const sendUpdateTimeout = useRef<NodeJS.Timeout | null>(null);
+    const sendCanvasUpdateRef = useRef(sendCanvasUpdate);
+    const applyRemoteUpdate = useCanvasStore(s => s.applyRemoteUpdate);
+
+    useEffect(() => {
+        sendCanvasUpdateRef.current = sendCanvasUpdate;
+    }, [sendCanvasUpdate]);
 
     // Load from Backend on Mount
     useEffect(() => {
@@ -55,14 +64,14 @@ export function useCanvasSync({
         const { n, c } = canvasUpdate.payload;
         if (n && c) {
             isRemoteUpdate.current = true;
-            loadCanvas(n, c);
-            savedStateRef.current = JSON.stringify({ n, c });
+            applyRemoteUpdate(n, c);
+            savedStateRef.current = serializeState(n, c);
             dispatch({ type: 'SET_HAS_UNSAVED_CHANGES', payload: false });
             setTimeout(() => {
                 isRemoteUpdate.current = false;
-            }, 100);
+            }, 200);
         }
-    }, [canvasUpdate, loadCanvas, user]);
+    }, [canvasUpdate, user]);
 
     // Send Updates (Track Changes)
     useEffect(() => {
@@ -76,14 +85,14 @@ export function useCanvasSync({
                 if (sendUpdateTimeout.current) clearTimeout(sendUpdateTimeout.current);
                 sendUpdateTimeout.current = setTimeout(() => {
                     const payload = {
-                        n: nodes.map(({ selected, ...rest }: any) => rest),
+                        n: stripVolatile(nodes),
                         c: connections
                     };
-                    sendCanvasUpdate('sync', payload);
+                    sendCanvasUpdateRef.current('sync', payload);
                 }, 50);
             }
         } else {
             dispatch({ type: 'SET_HAS_UNSAVED_CHANGES', payload: false });
         }
-    }, [nodes, connections, sendCanvasUpdate]);
+    }, [nodes, connections]);
 }

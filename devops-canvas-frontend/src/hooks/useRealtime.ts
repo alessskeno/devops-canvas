@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useAuthStore } from '../store/authStore';
 
 const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8080/api/ws';
@@ -124,34 +124,34 @@ export const useRealtime = (workspaceId?: string) => {
         };
     }, [user, workspaceId]);
 
-    const sendMessage = (msg: any) => {
+    const sendMessage = useCallback((msg: any) => {
         if (ws.current && ws.current.readyState === WebSocket.OPEN) {
             ws.current.send(JSON.stringify(msg));
         }
-    };
+    }, []);
 
-    const sendCanvasUpdate = (type: string, payload: any) => {
+    const sendCanvasUpdate = useCallback((type: string, payload: any) => {
         sendMessage({
             type: 'canvas_update',
             workspace_id: workspaceId,
             action: type,
             payload: payload,
-            sender_id: user?.id, // Helps filtering echo
+            sender_id: user?.id,
             timestamp: Date.now()
         });
-    };
+    }, [sendMessage, workspaceId, user?.id]);
 
-    const sendCursorMove = (x: number, y: number) => {
+    const sendCursorMove = useCallback((x: number, y: number) => {
         sendMessage({
             type: 'cursor_move',
             workspace_id: workspaceId,
             sender_id: user?.id,
-            sender_name: user?.email.split('@')[0], // Simple name extraction
+            sender_name: user?.email?.split('@')[0],
             x,
             y,
             timestamp: Date.now()
         });
-    };
+    }, [sendMessage, workspaceId, user?.id, user?.email]);
 
     return { isConnected, systemStats, workspaceStats, sendMessage, lastMessage, canvasUpdate, sendCanvasUpdate, activeCursors, sendCursorMove };
 };

@@ -115,6 +115,30 @@ export function ExportModal({ isOpen, onClose }: ExportModalProps) {
         toast.success('Copied!');
     };
 
+    const handleShareLink = () => {
+        const content = state.mode === 'canvas' ? configContent : getManifestContent();
+        navigator.clipboard.writeText(content);
+        toast.success('Link copied to clipboard!');
+    };
+
+    const handleDownloadFile = () => {
+        const content = state.mode === 'canvas' ? configContent : getManifestContent();
+        let filename: string;
+        if (state.mode === 'canvas') {
+            filename = `workspace-config.${state.format}`;
+        } else {
+            filename = state.manifestTab === 'docker' ? 'docker-compose.yml' : 'configs.yml';
+        }
+        const blob = new Blob([content], { type: state.format === 'json' ? 'application/json' : 'text/yaml' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+        toast.success(`Downloaded ${filename}`);
+    };
+
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Export Configuration" size="lg">
             <div className="space-y-4">
@@ -193,8 +217,8 @@ export function ExportModal({ isOpen, onClose }: ExportModalProps) {
                 )}
 
                 <div className="flex justify-end space-x-3 pt-2 border-t border-gray-100 dark:border-gray-800">
-                    <Button variant="outline" leftIcon={<Share2 size={16} />}>Share Link</Button>
-                    <Button leftIcon={<Download size={16} />}>Download File</Button>
+                    <Button variant="outline" leftIcon={<Share2 size={16} />} onClick={handleShareLink}>Share Link</Button>
+                    <Button leftIcon={<Download size={16} />} onClick={handleDownloadFile}>Download File</Button>
                 </div>
             </div>
         </Modal>

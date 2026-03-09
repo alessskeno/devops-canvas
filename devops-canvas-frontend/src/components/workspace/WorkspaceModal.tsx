@@ -135,7 +135,7 @@ export function WorkspaceModal({ isOpen, onClose, onSubmit, initialData, mode }:
                 </div>
 
                 <div className="flex justify-end space-x-3 mt-6">
-                    <Button variant="ghost" onClick={onClose}>Cancel</Button>
+                    <Button variant="danger" onClick={onClose}>Cancel</Button>
                     <Button onClick={handleSubmit} disabled={!state.name} isLoading={state.isLoading}>
                         {mode === 'create' ? "Create Workspace" : "Save Changes"}
                     </Button>

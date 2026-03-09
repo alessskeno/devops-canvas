@@ -23,12 +23,8 @@ export function useAutoSave({
     const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
     const { nodes, connections } = useCanvasStore();
 
-    // Helper to serialize state
     const serializeState = (n: any[], c: any[]) => {
-        const cleanNodes = n.map(node => {
-            const { selected, ...rest } = node;
-            return rest;
-        });
+        const cleanNodes = n.map(({ selected, measured, dragging, position_x, position_y, ...rest }: any) => rest);
         return JSON.stringify({ n: cleanNodes, c });
     };
 

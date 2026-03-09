@@ -23,10 +23,12 @@ interface WorkspaceCardProps {
     onDelete: () => void;
     onEdit: () => void;
     onDuplicate: () => void;
+    onShare?: () => void;
+    onExport?: () => void;
     highlight?: string;
 }
 
-export function WorkspaceCard({ workspace, onClick, onDelete, onEdit, onDuplicate, highlight = '' }: WorkspaceCardProps) {
+export function WorkspaceCard({ workspace, onClick, onDelete, onEdit, onDuplicate, onShare, onExport, highlight = '' }: WorkspaceCardProps) {
     // ... (existing state and handlers)
     const [isMenuOpen, setIsMenuOpen] = React.useState(false);
     const menuRef = React.useRef<HTMLDivElement>(null);
@@ -63,8 +65,10 @@ export function WorkspaceCard({ workspace, onClick, onDelete, onEdit, onDuplicat
                 onDelete();
                 break;
             case 'share':
+                onShare?.();
+                break;
             case 'export':
-                alert(`${action.charAt(0).toUpperCase() + action.slice(1)} feature coming soon!`);
+                onExport?.();
                 break;
         }
     };

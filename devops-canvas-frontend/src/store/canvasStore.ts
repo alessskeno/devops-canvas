@@ -76,6 +76,7 @@ interface CanvasState {
 
     setContextMenu: (menu: { nodeId: string; x: number; y: number } | null) => void;
     loadCanvas: (nodes: CanvasNode[], connections: Connection[]) => void;
+    applyRemoteUpdate: (remoteNodes: CanvasNode[], remoteConnections: Connection[]) => void;
 
     undo: () => void;
     redo: () => void;
@@ -334,6 +335,30 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     }),
 
     loadCanvas: (nodes, connections) => set({ nodes, connections, past: [], future: [], selectedNodeIds: [] }),
+
+    applyRemoteUpdate: (remoteNodes, remoteConnections) => set((state) => {
+        const remoteNodeMap = new Map(remoteNodes.map(n => [n.id, n]));
+
+        const updatedNodes: CanvasNode[] = remoteNodes.map(remoteNode => {
+            const localNode = state.nodes.find(n => n.id === remoteNode.id);
+            if (localNode) {
+                return {
+                    ...remoteNode,
+                    selected: localNode.selected,
+                    measured: localNode.measured,
+                };
+            }
+            return remoteNode;
+        });
+
+        const newSelectedIds = state.selectedNodeIds.filter(id => remoteNodeMap.has(id));
+
+        return {
+            nodes: updatedNodes,
+            connections: remoteConnections,
+            selectedNodeIds: newSelectedIds,
+        };
+    }),
 
     undo: () => set((state) => {
         if (state.past.length === 0) return state;

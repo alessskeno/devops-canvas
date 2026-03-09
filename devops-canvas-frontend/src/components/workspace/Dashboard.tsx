@@ -14,6 +14,8 @@ import { Select } from '../shared/Select';
 import { useDarkMode } from '../../hooks/useDarkMode';
 import { Workspace } from '../../types';
 import { Modal } from '../shared/Modal';
+import api from '../../utils/api';
+import { generateConfig } from '../../utils/exportConfig';
 
 
 export function Dashboard() {
@@ -63,6 +65,38 @@ export function Dashboard() {
             dispatch({ type: 'SET_WORKSPACE_TO_DELETE', workspace: null });
         } catch (error: any) {
             const msg = error.response?.data?.error || error.message || 'Deletion failed';
+            toast.error(msg);
+        }
+    };
+
+    const handleShare = (ws: Workspace) => {
+        const url = `${window.location.origin}/workspace/${ws.id}`;
+        navigator.clipboard.writeText(url);
+        toast.success('Workspace link copied!');
+    };
+
+    const handleExport = async (ws: Workspace) => {
+        try {
+            const response = await api.get(`/workspaces/${ws.id}/canvas`);
+            const { nodes: rawNodes, connections } = response.data;
+            const nodes = (rawNodes || []).map((n: any) => ({
+                ...n,
+                position: {
+                    x: n.position_x !== undefined ? n.position_x : (n.position?.x ?? 0),
+                    y: n.position_y !== undefined ? n.position_y : (n.position?.y ?? 0)
+                }
+            }));
+            const content = generateConfig(nodes, connections || [], 'yaml', false);
+            const blob = new Blob([content], { type: 'text/yaml' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'workspace-config.yaml';
+            a.click();
+            URL.revokeObjectURL(url);
+            toast.success('Workspace exported');
+        } catch (error: any) {
+            const msg = error.response?.data?.error || error.message || 'Export failed';
             toast.error(msg);
         }
     };
@@ -199,6 +233,8 @@ export function Dashboard() {
                                     onDelete={async () => {
                                         dispatch({ type: 'SET_WORKSPACE_TO_DELETE', workspace: ws });
                                     }}
+                                    onShare={() => handleShare(ws)}
+                                    onExport={() => handleExport(ws)}
                                     highlight={state.searchTerm}
                                 />
                             ))
