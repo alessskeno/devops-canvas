@@ -10,6 +10,7 @@ export interface NodeEditorState {
         componentId: string;
         componentName: string;
         componentType: string;
+        imageTag?: string;
     } | null;
     logViewerConfig: {
         isOpen: boolean;

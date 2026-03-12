@@ -12,6 +12,8 @@ interface TerminalModalProps {
     componentId: string;
     componentName: string;
     componentType: string;
+    /** Image tag shown in subname (e.g. "mariadb:latest"). Falls back to componentType if not set. */
+    imageTag?: string;
 }
 
 const MIN_W = 520;
@@ -63,7 +65,7 @@ const TERM_OPTIONS = {
     },
 };
 
-export function TerminalModal({ isOpen, onClose, workspaceId, componentId, componentName, componentType }: TerminalModalProps) {
+export function TerminalModal({ isOpen, onClose, workspaceId, componentId, componentName, componentType, imageTag }: TerminalModalProps) {
     const terminalElRef = useRef<HTMLDivElement>(null);
     const xtermRef = useRef<Terminal | null>(null);
     const fitAddonRef = useRef<FitAddon | null>(null);
@@ -92,7 +94,7 @@ export function TerminalModal({ isOpen, onClose, workspaceId, componentId, compo
         xtermRef.current = term;
         fitAddonRef.current = fitAddon;
 
-        term.writeln(`\x1b[34m>\x1b[0m Connecting to \x1b[1m${componentName}\x1b[0m (${componentType})...`);
+        term.writeln(`\x1b[34m>\x1b[0m Connecting to \x1b[1m${componentName}\x1b[0m (${imageTag ?? componentType})...`);
 
         const wsUrl = getTerminalWsUrl(workspaceId, componentId);
         const ws = new WebSocket(wsUrl);
@@ -148,7 +150,7 @@ export function TerminalModal({ isOpen, onClose, workspaceId, componentId, compo
             xtermRef.current = null;
             fitAddonRef.current = null;
         };
-    }, [isOpen, workspaceId, componentId, componentName, componentType]);
+    }, [isOpen, workspaceId, componentId, componentName, componentType, imageTag]);
 
     // Re-fit on fullscreen toggle
     useEffect(() => {
@@ -244,7 +246,7 @@ export function TerminalModal({ isOpen, onClose, workspaceId, componentId, compo
                             {componentName}
                         </span>
                         <span className="text-[10px] text-slate-500 font-mono truncate">
-                            {componentType}
+                            {imageTag ?? componentType}
                         </span>
                     </div>
                     <div className="flex items-center gap-0.5">

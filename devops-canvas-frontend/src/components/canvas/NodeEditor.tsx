@@ -90,11 +90,15 @@ function NodeEditorContent() {
         const node = nodes.find(n => n.id === nodeId);
         if (!node) return;
         const def = getComponentByType(node.type);
+        const image = (node.data as any)?.image;
+        const tag = (node.data as any)?.tag;
+        const imageTag = image && tag ? `${image}:${tag}` : image || undefined;
         setTerminalConfig({
             isOpen: true,
             componentId: nodeId,
             componentName: node.data.label || 'Component',
-            componentType: def?.name || node.type
+            componentType: def?.name || node.type,
+            imageTag
         });
     };
 
@@ -176,10 +180,10 @@ function NodeEditorContent() {
         if (!workspaceStats?.containers || workspaceStats.containers.length === 0) return running;
 
         nodes.forEach(node => {
-            const shortID = node.id.slice(0, 4);
-            const expectedServiceFragment = `${node.type}-${shortID}`;
+            const serviceName = (node.data as any)?.serviceName?.trim();
+            const expectedServiceFragment = serviceName || `${node.type}-${node.id.slice(0, 4)}`;
             const isRunning = workspaceStats.containers.some((c: any) =>
-                c.Name.includes(expectedServiceFragment)
+                c.Name && c.Name.includes(expectedServiceFragment)
             );
             if (isRunning) running.add(node.id);
         });
@@ -304,6 +308,7 @@ function NodeEditorContent() {
                     componentId={state.terminalConfig.componentId}
                     componentName={state.terminalConfig.componentName}
                     componentType={state.terminalConfig.componentType}
+                    imageTag={state.terminalConfig.imageTag}
                 />
             )}
 

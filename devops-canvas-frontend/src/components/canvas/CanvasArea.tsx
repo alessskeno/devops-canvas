@@ -241,6 +241,7 @@ export const CanvasArea = React.forwardRef<HTMLDivElement, CanvasAreaProps>(func
                 onNodeContextMenu={handleNodeContextMenu}
                 onNodesDelete={handleNodesDelete}
                 deleteKeyCode={['Backspace', 'Delete']}
+                panActivationKeyCode={null}
                 multiSelectionKeyCode="Meta"
                 selectionMode={SelectionMode.Partial}
                 selectNodesOnDrag={false}

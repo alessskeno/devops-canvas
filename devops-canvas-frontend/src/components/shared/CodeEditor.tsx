@@ -4,7 +4,10 @@ import Editor from '@monaco-editor/react';
 export type CodeEditorLanguage = 'yaml' | 'json' | 'shell' | 'plaintext' | 'ini';
 
 interface CodeEditorProps {
-    value: string;
+    /** Controlled: editor shows this value and syncs on every change (can drop keystrokes). */
+    value?: string;
+    /** Uncontrolled: editor uses this only as initial content; use when typing must not be overwritten (e.g. spaces). */
+    defaultValue?: string;
     onChange?: (value: string) => void;
     language?: CodeEditorLanguage;
     readOnly?: boolean;
@@ -16,6 +19,7 @@ const DEFAULT_HEIGHT = '280px';
 
 export function CodeEditor({
     value,
+    defaultValue,
     onChange,
     language = 'plaintext',
     readOnly = false,
@@ -23,6 +27,7 @@ export function CodeEditor({
     className = '',
 }: CodeEditorProps) {
     const editorHeight = typeof height === 'number' ? `${height}px` : height;
+    const uncontrolled = defaultValue !== undefined;
 
     const handleMount = (
         editor: import('monaco-editor').editor.IStandaloneCodeEditor,
@@ -42,7 +47,7 @@ export function CodeEditor({
                 height={editorHeight}
                 defaultLanguage={language}
                 language={language}
-                value={value}
+                {...(uncontrolled ? { defaultValue } : { value: value ?? '' })}
                 onChange={onChange !== undefined ? (v) => onChange(v ?? '') : undefined}
                 theme="vs-dark"
                 loading={null}
