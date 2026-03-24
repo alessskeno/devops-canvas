@@ -3,7 +3,6 @@ package auth
 import (
 	"context"
 	"errors"
-	"log"
 	"os"
 	"time"
 
@@ -121,7 +120,7 @@ func (p *LocalAuthProvider) UpdateProfile(ctx context.Context, userID string, re
 func (p *LocalAuthProvider) VerifyToken(ctx context.Context, tokenString string) (string, error) {
 	secret := os.Getenv("JWT_SECRET")
 	if secret == "" {
-		secret = "supersecretkey"
+		return "", errors.New("JWT_SECRET is not configured")
 	}
 
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
@@ -150,8 +149,7 @@ func (p *LocalAuthProvider) VerifyToken(ctx context.Context, tokenString string)
 func (p *LocalAuthProvider) generateToken(userID string) (string, error) {
 	secret := os.Getenv("JWT_SECRET")
 	if secret == "" {
-		log.Println("WARNING: JWT_SECRET not set, using default")
-		secret = "supersecretkey"
+		return "", errors.New("JWT_SECRET is not configured")
 	}
 
 	claims := jwt.MapClaims{

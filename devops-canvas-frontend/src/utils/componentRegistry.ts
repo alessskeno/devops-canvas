@@ -123,7 +123,7 @@ export const COMPONENT_REGISTRY: ComponentDefinition[] = [
         icon: 'Archive',
         category: 'storage',
         color: 'text-rose-600 bg-rose-100 dark:text-rose-400 dark:bg-rose-900/30',
-        defaultConfig: { label: 'MinIO', image: 'minio/minio', tag: 'latest', portMappings: ['9000:9000', '9001:9001'], restartPolicy: 'always' },
+        defaultConfig: { label: 'MinIO', image: 'minio/minio', tag: 'latest', portMappings: ['9000:9000', '9001:9001'], restartPolicy: 'always', root_user: 'minioadmin', root_password: '' },
         allowInput: true,
         allowOutput: false
     },
@@ -169,7 +169,7 @@ export const COMPONENT_REGISTRY: ComponentDefinition[] = [
         icon: 'Globe',
         category: 'proxy-gateway',
         color: 'text-teal-600 bg-teal-100 dark:text-teal-400 dark:bg-teal-900/30',
-        defaultConfig: { label: 'Kong Gateway', image: 'kong', tag: 'latest', portMappings: ['8000:8000', '8001:8001'], restartPolicy: 'always' },
+        defaultConfig: { label: 'Kong Gateway', image: 'kong', tag: 'latest', portMappings: ['8000:8000', '8001:8001'], restartPolicy: 'always', database: 'off' },
         allowInput: true,
         allowOutput: true
     },
@@ -200,13 +200,13 @@ export const COMPONENT_REGISTRY: ComponentDefinition[] = [
     {
         type: 'supabase',
         name: 'Supabase',
-        description: 'Backend-as-a-Service with Auth',
+        description: 'Supabase Auth (GoTrue) — connect to PostgreSQL on the canvas; set API URL from host port automatically',
         icon: 'Shield',
         category: 'auth-security',
         color: 'text-emerald-600 bg-emerald-100 dark:text-emerald-400 dark:bg-emerald-900/30',
-        defaultConfig: { label: 'Supabase', image: 'supabase/gotrue', tag: 'latest', portMappings: ['9999:9999'], restartPolicy: 'always' },
+        defaultConfig: { label: 'Supabase', image: 'supabase/gotrue', tag: 'v2.188.1', portMappings: ['9999:9999'], restartPolicy: 'always' },
         allowInput: true,
-        allowOutput: false
+        allowOutput: true
     },
 
     // ─── Messaging ────────────────────────────────────────────────────
@@ -228,7 +228,7 @@ export const COMPONENT_REGISTRY: ComponentDefinition[] = [
         icon: 'Activity',
         category: 'messaging',
         color: 'text-orange-600 bg-orange-100 dark:text-orange-400 dark:bg-orange-900/30',
-        defaultConfig: { label: 'Event Stream', image: 'bitnami/kafka', tag: 'latest', portMappings: ['9092:9092'], restartPolicy: 'always' },
+        defaultConfig: { label: 'Event Stream', image: 'apache/kafka', tag: 'latest', portMappings: ['9092:9092'], restartPolicy: 'always' },
         allowInput: true,
         allowOutput: true
     },
@@ -252,7 +252,7 @@ export const COMPONENT_REGISTRY: ComponentDefinition[] = [
         icon: 'Search',
         category: 'search',
         color: 'text-yellow-600 bg-yellow-100 dark:text-yellow-400 dark:bg-yellow-900/30',
-        defaultConfig: { label: 'Elasticsearch', image: 'elasticsearch', tag: 'latest', portMappings: ['9200:9200'], restartPolicy: 'always' },
+        defaultConfig: { label: 'Elasticsearch', image: 'docker.elastic.co/elasticsearch/elasticsearch', tag: '8.17.3', portMappings: ['9200:9200'], restartPolicy: 'always' },
         allowInput: true,
         allowOutput: false
     },
@@ -287,7 +287,7 @@ export const COMPONENT_REGISTRY: ComponentDefinition[] = [
         icon: 'Gauge',
         category: 'monitoring',
         color: 'text-orange-600 bg-orange-100 dark:text-orange-400 dark:bg-orange-900/30',
-        defaultConfig: { label: 'Prometheus', image: 'prom/prometheus', tag: 'latest', portMappings: ['9090:9090'], restartPolicy: 'always' },
+        defaultConfig: { label: 'Prometheus', image: 'prom/prometheus', tag: 'latest', portMappings: ['9090:9090'], restartPolicy: 'always', alertmanager: '' },
         allowInput: true,
         allowOutput: true
     },

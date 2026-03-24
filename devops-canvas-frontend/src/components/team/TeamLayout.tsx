@@ -8,7 +8,8 @@ import {
     Mail,
     Layers,
     Trash2,
-    Check
+    Check,
+    Copy
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '../../utils/cn';
@@ -26,12 +27,13 @@ export default function TeamLayout() {
     const [activeTab, setActiveTab] = useState<'overview' | 'members' | 'invite' | 'roles'>('overview');
     const [inviteEmail, setInviteEmail] = useState('');
     const [inviteRole, setInviteRole] = useState<'Admin' | 'Editor' | 'Viewer'>('Viewer');
+    const [inviteLink, setInviteLink] = useState<string | null>(null);
+    const [inviteSubmitting, setInviteSubmitting] = useState(false);
 
     // Store integration
     const { members, fetchMembers, inviteMember, updateRole, removeMember } = useTeamStore();
     const { user } = useAuthStore();
     const teamMembers = members || [];
-    const [isLoading, setIsLoading] = React.useState(false);
 
     React.useEffect(() => {
         fetchMembers();
@@ -47,15 +49,28 @@ export default function TeamLayout() {
 
     const handleInvite = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (inviteEmail) {
-            try {
-                await inviteMember(inviteEmail, inviteRole);
-                toast.success('Invitation sent successfully');
-                setInviteEmail('');
-                setActiveTab('members');
-            } catch (error: any) {
-                toast.error(error.message || 'Failed to send invitation');
-            }
+        const email = inviteEmail.trim();
+        if (!email) return;
+        setInviteSubmitting(true);
+        try {
+            const url = await inviteMember(email, inviteRole);
+            setInviteLink(url);
+            setInviteEmail('');
+            toast.success('Invitation created — copy the link and send it to your teammate');
+        } catch (error: any) {
+            toast.error(error.message || 'Failed to create invitation');
+        } finally {
+            setInviteSubmitting(false);
+        }
+    };
+
+    const copyInviteLink = async () => {
+        if (!inviteLink) return;
+        try {
+            await navigator.clipboard.writeText(inviteLink);
+            toast.success('Link copied to clipboard');
+        } catch {
+            toast.error('Could not copy — select the link and copy manually');
         }
     };
 
@@ -228,7 +243,9 @@ export default function TeamLayout() {
                         <div className="space-y-8 animate-in fade-in duration-300 max-w-lg">
                             <div>
                                 <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">Invite Users</h2>
-                                <p className="text-sm text-gray-500 dark:text-gray-400">Send an invitation to join your workspace.</p>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">
+                                    Create an invite for this email. We do not send email yet — copy the link and share it (chat, email, etc.).
+                                </p>
                             </div>
 
                             <form onSubmit={handleInvite} className="space-y-6">
@@ -268,13 +285,40 @@ export default function TeamLayout() {
                                 </div>
 
                                 <div className="flex justify-end gap-3">
-                                    <Button variant="ghost" onClick={() => setActiveTab('members')}>Cancel</Button>
-                                    <Button onClick={(e) => {
-                                        // Trigger explicit form submit if Button is just a div/button
-                                        handleInvite(e as any);
-                                    }}>Send Invitation</Button>
+                                    <Button type="button" variant="ghost" onClick={() => setActiveTab('members')}>
+                                        Cancel
+                                    </Button>
+                                    <Button type="submit" isLoading={inviteSubmitting} disabled={!inviteEmail.trim()}>
+                                        Create invitation
+                                    </Button>
                                 </div>
                             </form>
+
+                            {inviteLink && (
+                                <div className="space-y-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900/40 p-4">
+                                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Invitation link
+                                    </span>
+                                    <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch">
+                                        <Input
+                                            readOnly
+                                            value={inviteLink}
+                                            className="font-mono text-xs sm:flex-1"
+                                            onClick={(e) => (e.target as HTMLInputElement).select()}
+                                            aria-label="Invitation link"
+                                        />
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            className="shrink-0"
+                                            leftIcon={<Copy size={16} />}
+                                            onClick={copyInviteLink}
+                                        >
+                                            Copy
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
 

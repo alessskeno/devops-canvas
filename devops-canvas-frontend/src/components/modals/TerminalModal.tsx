@@ -4,6 +4,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import { createPortal } from 'react-dom';
 import { Terminal as TerminalIcon, Maximize2, Minimize2, X, GripHorizontal } from 'lucide-react';
 import '@xterm/xterm/css/xterm.css';
+import { getApiWebSocketUrl } from '../../utils/apiOrigin';
 
 interface TerminalModalProps {
     isOpen: boolean;
@@ -20,11 +21,10 @@ const MIN_W = 520;
 const MIN_H = 320;
 const HEADER_H = 40;
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
-
 function getTerminalWsUrl(workspaceId: string, componentId: string): string {
-    const wsBase = API_BASE.replace(/^http/, 'ws');
-    return `${wsBase}/deploy/${workspaceId}/terminal?component_id=${componentId}`;
+    return getApiWebSocketUrl(
+        `/deploy/${workspaceId}/terminal?component_id=${encodeURIComponent(componentId)}`
+    );
 }
 
 function centerRect() {

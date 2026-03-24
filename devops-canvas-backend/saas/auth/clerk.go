@@ -28,13 +28,11 @@ func (p *ClerkAuthProvider) Login(ctx context.Context, req models.LoginRequest) 
 }
 
 func (p *ClerkAuthProvider) VerifyToken(ctx context.Context, token string) (string, error) {
-    // TODO: Verify JWT with Clerk Keys
-	return "clerk_user_id_placeholder", nil
+	return "", errors.New("clerk auth provider is not implemented; use local auth or complete Clerk integration")
 }
 
 func (p *ClerkAuthProvider) GetUser(ctx context.Context, userID string) (*models.User, error) {
-    // TODO: Fetch user from Clerk API or Sync to local DB
-    return &models.User{ID: userID, Email: "clerk@example.com", Name: "Clerk User"}, nil
+	return nil, errors.New("clerk auth provider is not implemented")
 }
 
 func (p *ClerkAuthProvider) UpdateProfile(ctx context.Context, userID string, req models.UpdateProfileRequest) (*models.User, error) {

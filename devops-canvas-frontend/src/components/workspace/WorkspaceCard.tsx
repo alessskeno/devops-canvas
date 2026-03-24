@@ -1,21 +1,9 @@
 import React from 'react';
 import { Workspace } from '../../types';
-import { MoreVertical, Layers, Server, Activity, ArrowRight, ExternalLink, Share2, Copy, Trash2, Download, Edit, Database, Box, HardDrive, BarChart2, Bell, FileText } from 'lucide-react';
+import { MoreVertical, ExternalLink, Share2, Copy, Trash2, Download, Edit, Box } from 'lucide-react';
 import { HighlightedText } from '../shared/HighlightedText';
 import { getComponentByType } from '../../utils/componentRegistry';
-
-// ... (IconMap definition)
-const IconMap: Record<string, any> = {
-    'Container': Box,
-    'Database': Database,
-    'Layers': Layers,
-    'Activity': Activity,
-    'Server': Server,
-    'HardDrive': HardDrive,
-    'BarChart': BarChart2,
-    'Bell': Bell,
-    'FileText': FileText
-};
+import { getComponentIcon } from '../../utils/componentIcons';
 
 interface WorkspaceCardProps {
     workspace: Workspace;
@@ -29,7 +17,6 @@ interface WorkspaceCardProps {
 }
 
 export function WorkspaceCard({ workspace, onClick, onDelete, onEdit, onDuplicate, onShare, onExport, highlight = '' }: WorkspaceCardProps) {
-    // ... (existing state and handlers)
     const [isMenuOpen, setIsMenuOpen] = React.useState(false);
     const menuRef = React.useRef<HTMLDivElement>(null);
 
@@ -163,28 +150,37 @@ export function WorkspaceCard({ workspace, onClick, onDelete, onEdit, onDuplicat
             </p>
 
             <div className="flex items-center mb-4 pl-2">
-                <div className="flex items-center -space-x-3">
+                <div className="flex items-center -space-x-2">
                     {displayedTypes.length > 0 ? (
                         displayedTypes.map((type, index) => {
                             const def = getComponentByType(type);
-                            const iconName = def?.icon || 'Server';
-                            const IconComponent = IconMap[iconName] || Server;
-                            const colorClass = def?.color?.split(' ')[0] || 'text-slate-600'; // extracting text-color part simplistic way or just use def.color
+                            const CompIcon = getComponentIcon(type);
+                            const chipClass =
+                                def?.color ||
+                                'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400';
 
                             return (
-                                <div key={type} className="h-8 w-8 rounded-full bg-gray-100 dark:bg-slate-800 border-2 border-white dark:border-slate-900 flex items-center justify-center text-xs relative z-[${30-index*10}]" title={def?.name || type}>
-                                    <IconComponent size={16} className={def?.color ? def.color.split(' ')[0] : 'text-slate-500'} />
+                                <div
+                                    key={`${type}-${index}`}
+                                    className={`h-9 w-9 rounded-lg border-2 border-white dark:border-slate-900 flex items-center justify-center shrink-0 [&_svg]:w-[18px] [&_svg]:h-[18px] ${chipClass}`}
+                                    style={{ zIndex: 30 - index }}
+                                    title={def?.name || type}
+                                >
+                                    <CompIcon size={18} />
                                 </div>
                             );
                         })
                     ) : (
-                        <div className="h-8 w-8 rounded-full bg-gray-100 dark:bg-slate-800 border-2 border-white dark:border-slate-900 flex items-center justify-center text-xs text-slate-400 relative z-30" title="Empty Workspace">
-                            <Box size={16} />
+                        <div
+                            className="h-9 w-9 rounded-lg bg-slate-100 dark:bg-slate-800 border-2 border-white dark:border-slate-900 flex items-center justify-center text-slate-400 relative z-30"
+                            title="Empty workspace"
+                        >
+                            <Box size={18} />
                         </div>
                     )}
 
                     {showPlusBadge && (
-                        <div className="h-8 w-8 rounded-full bg-slate-200 dark:bg-slate-700 border-2 border-white dark:border-slate-900 flex items-center justify-center text-[10px] font-bold text-slate-600 dark:text-slate-300 relative z-0">
+                        <div className="h-9 w-9 rounded-lg bg-slate-200 dark:bg-slate-700 border-2 border-white dark:border-slate-900 flex items-center justify-center text-[10px] font-bold text-slate-600 dark:text-slate-300 relative z-0">
                             +{remainingCount}
                         </div>
                     )}

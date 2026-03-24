@@ -209,6 +209,7 @@ export function LogViewerModal({ isOpen, onClose, workspaceId, componentId, comp
                                 extraLines={1}
                                 caseInsensitive
                                 selectableLines
+                                wrapLines
                                 style={{
                                     background: '#0f172a',
                                     color: '#e2e8f0',

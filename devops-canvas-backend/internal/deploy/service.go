@@ -6,6 +6,7 @@ import (
 	"log"
 
 	"devops-canvas-backend/internal/deploy/translator"
+	"devops-canvas-backend/internal/models"
 	"devops-canvas-backend/internal/realtime"
 	"devops-canvas-backend/internal/tenant"
 	"devops-canvas-backend/internal/workspace"
@@ -41,6 +42,16 @@ func NewService(repo *Repository, workspaceRepo *workspace.Repository, generator
 		dockerClient:  dockerClient,
 		provisioner:   provisioner,
 	}
+}
+
+// resolveServiceNameForNode returns the Docker Compose service name for a node (default type-id4, or custom from component settings).
+func resolveServiceNameForNode(node models.Node) string {
+	name := fmt.Sprintf("%s-%s", node.Type, node.ID[:4])
+	var uConfig translator.UniversalNodeConfig
+	if err := json.Unmarshal(node.Data, &uConfig); err == nil && uConfig.ServiceName != "" {
+		name = uConfig.ServiceName
+	}
+	return name
 }
 
 func (s *Service) DeployWorkspace(ctx context.Context, workspaceID string) (string, error) {
@@ -124,7 +135,11 @@ func (s *Service) DeployWorkspace(ctx context.Context, workspaceID string) (stri
 	if configs, ok := manifests["configs"].(map[string]string); ok {
 		for filename, content := range configs {
 			cleanContent := strings.ReplaceAll(content, "\t", "  ")
-			if err := os.WriteFile(filepath.Join(baseDir, "configs", filename), []byte(cleanContent), 0644); err != nil {
+			path := filepath.Join(baseDir, "configs", filename)
+			if st, err := os.Stat(path); err == nil && st.IsDir() {
+				_ = os.RemoveAll(path)
+			}
+			if err := os.WriteFile(path, []byte(cleanContent), 0644); err != nil {
 				return "", fmt.Errorf("failed to write config %s: %w", filename, err)
 			}
 		}
@@ -164,8 +179,10 @@ func (s *Service) DeployWorkspace(ctx context.Context, workspaceID string) (stri
 			if ctx.Err() != nil {
 				return "", ctx.Err()
 			}
-			s.broadcastStep(workspaceID, "provisioning", "error", "Provisioning Failed", string(output))
-			return "", fmt.Errorf("docker compose up failed: %s, output: %s", err, string(output))
+			short, full := SummarizeDockerComposeError(output, err)
+			log.Printf("[deploy] workspace=%s compose up failed: %s", workspaceID, full)
+			s.broadcastStep(workspaceID, "provisioning", "error", "Provisioning Failed", short)
+			return "", &ComposeUpError{Summary: short, Full: full}
 		}
 		s.broadcastStep(workspaceID, "provisioning", "completed", "Provisioning Containers", "")
 	}
@@ -227,14 +244,14 @@ func (s *Service) GetLogs(ctx context.Context, workspaceID string, componentID s
 		return []string{"No deployment found (directory missing)"}, nil
 	}
 
-	// Determine target service name
+	// Determine target service name (same as in compose: default type-id4 or custom ServiceName)
 	targetServiceName := ""
 	if componentID != "" {
 		canvas, err := s.workspaceRepo.GetCanvas(ctx, workspaceID)
 		if err == nil {
 			for _, node := range canvas.Nodes {
 				if node.ID == componentID {
-					targetServiceName = fmt.Sprintf("%s-%s", node.Type, node.ID[:4])
+					targetServiceName = resolveServiceNameForNode(node)
 					break
 				}
 			}
@@ -317,9 +334,15 @@ func (s *Service) GenerateManifests(ctx context.Context, workspaceID string) (ma
 		return nil, fmt.Errorf("failed to fetch canvas: %w", err)
 	}
 
+	// 1b. Validate required tool-option fields so deployment fails with a clear error
+	if err := ValidateCanvasForDeploy(canvas); err != nil {
+		return nil, err
+	}
+
 	// 2. Generate Manifests for all nodes (Docker Compose only)
 	composeServices := make(map[string]translator.ComposeService)
 	configs := make(map[string]string)
+	composeTopConfigs := make(map[string]interface{})
 	nodeIDToServiceName := make(map[string]string)
 
 	for _, node := range canvas.Nodes {
@@ -340,16 +363,16 @@ func (s *Service) GenerateManifests(ctx context.Context, workspaceID string) (ma
 		for k, v := range manifests.Configs {
 			configs[k] = v
 		}
+		for name, body := range manifests.ComposeConfigInline {
+			composeTopConfigs[name] = map[string]string{"content": body}
+		}
 
 		// Add to Docker Compose Services
 		if manifests.DockerCompose != nil {
-			serviceName := fmt.Sprintf("%s-%s", node.Type, node.ID[:4])
+			serviceName := resolveServiceNameForNode(node)
 
 			var uConfig translator.UniversalNodeConfig
 			if err := json.Unmarshal(node.Data, &uConfig); err == nil {
-				if uConfig.ServiceName != "" {
-					serviceName = uConfig.ServiceName
-				}
 				if len(uConfig.PortMappings) > 0 {
 					var valid []string
 					for _, p := range uConfig.PortMappings {
@@ -386,11 +409,19 @@ func (s *Service) GenerateManifests(ctx context.Context, workspaceID string) (ma
 		svc := composeServices[sourceName]
 		// Deduplicate: only add if not already present
 		seen := make(map[string]bool)
-		for _, d := range svc.DependsOn {
-			seen[d] = true
+		if svc.DependsOn != nil {
+			for _, d := range svc.DependsOn.Started {
+				seen[d] = true
+			}
+			for _, d := range svc.DependsOn.Completed {
+				seen[d] = true
+			}
 		}
 		if !seen[targetName] {
-			svc.DependsOn = append(svc.DependsOn, targetName)
+			if svc.DependsOn == nil {
+				svc.DependsOn = &translator.DependsOnSpec{}
+			}
+			svc.DependsOn.AppendStarted(targetName)
 			composeServices[sourceName] = svc
 		}
 	}
@@ -418,11 +449,15 @@ func (s *Service) GenerateManifests(ctx context.Context, workspaceID string) (ma
 	}
 
 	if len(composeServices) > 0 {
-		result["docker_compose"] = map[string]interface{}{
-			"version":  "3.8",
+		// Compose file format v2+ ignores top-level `version`; omit it to avoid CLI warnings.
+		dc := map[string]interface{}{
 			"services": composeServices,
 			"volumes":  volumes,
 		}
+		if len(composeTopConfigs) > 0 {
+			dc["configs"] = composeTopConfigs
+		}
+		result["docker_compose"] = dc
 	}
 
 	return result, nil

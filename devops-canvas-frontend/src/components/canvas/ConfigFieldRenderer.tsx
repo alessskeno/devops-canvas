@@ -35,7 +35,7 @@ export const ConfigFieldRenderer: React.FC<ConfigFieldRendererProps> = ({
         <div className="mb-3">
             {field.type === 'select' ? (
                 <Select
-                    label={field.label}
+                    label={field.label + (field.required ? ' *' : '')}
                     value={value || field.defaultValue || ''}
                     onChange={(e) => onChange(field.key, e.target.value)}
                     options={
@@ -50,7 +50,7 @@ export const ConfigFieldRenderer: React.FC<ConfigFieldRendererProps> = ({
             ) : field.type === 'textarea' ? (
                 <div>
                     <label className="block text-xs font-medium text-slate-800 dark:text-slate-400 mb-1.5">
-                        {field.label}
+                        {field.label}{field.required && <span className="text-red-500 ml-0.5">*</span>}
                     </label>
                     <textarea
                         className="flex w-full rounded-md border border-slate-400 bg-white px-3 py-2 text-sm placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow dark:bg-slate-900 dark:border-slate-800 dark:text-white select-text"
@@ -66,7 +66,7 @@ export const ConfigFieldRenderer: React.FC<ConfigFieldRendererProps> = ({
                 </div>
             ) : field.type === 'boolean' ? (
                 <div className="flex items-center justify-between py-1">
-                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{field.label}</span>
+                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{field.label}{field.required && <span className="text-red-500 ml-0.5">*</span>}</span>
                     <Toggle
                         checked={value !== undefined ? value : field.defaultValue}
                         onChange={(v) => onChange(field.key, v)}
@@ -74,25 +74,39 @@ export const ConfigFieldRenderer: React.FC<ConfigFieldRendererProps> = ({
                     />
                 </div>
             ) : field.type === 'node-select' ? (
-                <Select
-                    label={field.label}
-                    value={value || ''}
-                    onChange={(e) => onChange(field.key, e.target.value)}
-                    options={[
-                        { label: 'Select a connected node...', value: '' },
-                        ...nodes
-                            .filter(n => {
-                                const isCorrectType = n.type === field.nodeType;
-                                const isConnected = connections.some(conn =>
-                                    (conn.source === nodeId && conn.target === n.id) ||
-                                    (conn.target === nodeId && conn.source === n.id)
-                                );
-                                return isCorrectType && isConnected;
-                            })
-                            .map(n => ({ label: `${n.data.label} (${n.id.slice(0, 4)})`, value: n.id }))
-                    ]}
-                    disabled={isLocked}
-                />
+                <div>
+                    <Select
+                        label={field.label + (field.required ? ' *' : '')}
+                        value={value || ''}
+                        onChange={(e) => onChange(field.key, e.target.value)}
+                        options={[
+                            {
+                                label:
+                                    field.nodeSelectScope === 'workspace'
+                                        ? 'Select a node...'
+                                        : 'Select a connected node...',
+                                value: ''
+                            },
+                            ...nodes
+                                .filter(n => {
+                                    const isCorrectType = n.type === field.nodeType;
+                                    if (field.nodeSelectScope === 'workspace') {
+                                        return isCorrectType;
+                                    }
+                                    const isConnected = connections.some(conn =>
+                                        (conn.source === nodeId && conn.target === n.id) ||
+                                        (conn.target === nodeId && conn.source === n.id)
+                                    );
+                                    return isCorrectType && isConnected;
+                                })
+                                .map(n => ({ label: `${n.data.label} (${n.id.slice(0, 4)})`, value: n.id }))
+                        ]}
+                        disabled={isLocked}
+                    />
+                    {field.helpText && (
+                        <p className="text-xs text-slate-400 mt-1">{field.helpText}</p>
+                    )}
+                </div>
             ) : (field.type as string) === 'folder-upload' ? (
                 <FolderUploadField
                     field={field}
@@ -103,14 +117,19 @@ export const ConfigFieldRenderer: React.FC<ConfigFieldRendererProps> = ({
                     workspaceId={workspaceId}
                 />
             ) : (
-                <Input
-                    label={field.label}
-                    type={field.type === 'password' ? 'password' : field.type === 'number' ? 'number' : 'text'}
-                    placeholder={field.placeholder}
-                    value={value !== undefined ? value : field.defaultValue || ''}
-                    onChange={(e) => onChange(field.key, field.type === 'number' ? parseFloat(e.target.value) : e.target.value)}
-                    disabled={isLocked}
-                />
+                <div>
+                    <Input
+                        label={field.label + (field.required ? ' *' : '')}
+                        type={field.type === 'password' ? 'password' : field.type === 'number' ? 'number' : 'text'}
+                        placeholder={field.placeholder}
+                        value={value !== undefined ? value : field.defaultValue || ''}
+                        onChange={(e) => onChange(field.key, field.type === 'number' ? parseFloat(e.target.value) : e.target.value)}
+                        disabled={isLocked}
+                    />
+                    {field.helpText && (
+                        <p className="text-xs text-slate-400 mt-1">{field.helpText}</p>
+                    )}
+                </div>
             )}
         </div>
     );

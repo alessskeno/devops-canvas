@@ -5,6 +5,7 @@ import (
 	"devops-canvas-backend/internal/models"
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 type ManifestGenerator struct{}
@@ -73,7 +74,22 @@ func (g *ManifestGenerator) GenerateManifests(node models.Node, allNodes []model
 				if tag == "" {
 					tag = "latest"
 				}
-				result.DockerCompose.Image = fmt.Sprintf("%s:%s", uConfig.Image, tag)
+				img := uConfig.Image
+				// Bitnami Kafka often has no :latest; canvas KRaft config targets the official Apache image.
+				if node.Type == "kafka" && strings.Contains(strings.ToLower(img), "bitnami/kafka") {
+					img = "apache/kafka"
+				}
+				// Library elasticsearch image/tags are not published; use Elastic's registry (no :latest there).
+				if node.Type == "elasticsearch" {
+					il := strings.ToLower(img)
+					if il == "elasticsearch" || il == "library/elasticsearch" || il == "docker.io/library/elasticsearch" {
+						img = "docker.elastic.co/elasticsearch/elasticsearch"
+					}
+					if strings.Contains(strings.ToLower(img), "docker.elastic.co/elasticsearch/elasticsearch") && (tag == "" || tag == "latest") {
+						tag = "8.17.3"
+					}
+				}
+				result.DockerCompose.Image = fmt.Sprintf("%s:%s", img, tag)
 			}
 			// Container Name
 			if uConfig.ContainerName != "" {
@@ -90,7 +106,12 @@ func (g *ManifestGenerator) GenerateManifests(node models.Node, allNodes []model
 			}
 			// Depends On
 			if len(uConfig.DependsOn) > 0 {
-				result.DockerCompose.DependsOn = append(result.DockerCompose.DependsOn, uConfig.DependsOn...)
+				if result.DockerCompose.DependsOn == nil {
+					result.DockerCompose.DependsOn = &translator.DependsOnSpec{}
+				}
+				for _, name := range uConfig.DependsOn {
+					result.DockerCompose.DependsOn.AppendStarted(name)
+				}
 			}
 			// Port Mappings
 			if len(uConfig.PortMappings) > 0 {
@@ -150,6 +171,9 @@ func (g *ManifestGenerator) GenerateManifests(node models.Node, allNodes []model
 				}
 			}
 		}
+		// Drop legacy per-file config binds (often stored in saved canvases); they conflict with
+		// prom/prometheus & alertmanager image layout and cause "mount directory onto file" on WSL.
+		result.DockerCompose.Volumes = translator.SanitizeMonitoringLegacyFileMounts(node.Type, result.DockerCompose.Volumes)
 	}
 
 	return result, nil

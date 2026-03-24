@@ -90,8 +90,9 @@ export function ExportModal({ isOpen, onClose }: ExportModalProps) {
         try {
             const response = await api.post(`/deploy/${workspaceId}/manifests`);
             dispatch({ type: 'FETCH_MANIFESTS_SUCCESS', payload: response.data });
-        } catch (error) {
-            toast.error('Failed to generate manifests');
+        } catch (error: any) {
+            const msg = error?.response?.data?.message || error?.message || 'Failed to generate manifests';
+            toast.error(msg);
             console.error(error);
             dispatch({ type: 'FETCH_MANIFESTS_ERROR' });
         }

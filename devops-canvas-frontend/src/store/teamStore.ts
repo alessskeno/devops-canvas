@@ -16,7 +16,7 @@ interface TeamState {
     error: string | null;
 
     fetchMembers: () => Promise<void>;
-    inviteMember: (email: string, role: string) => Promise<void>;
+    inviteMember: (email: string, role: string) => Promise<string>;
     updateRole: (id: string, role: string) => Promise<void>;
     removeMember: (id: string) => Promise<void>;
 }
@@ -39,10 +39,13 @@ export const useTeamStore = create<TeamState>((set) => ({
     inviteMember: async (email, role) => {
         set({ isLoading: true, error: null });
         try {
-            await api.post('/team/invite', { email, role });
-            // Refresh list after invite
+            const { data } = await api.post<{ message: string; invite_url: string }>('/team/invite', {
+                email,
+                role,
+            });
             const response = await api.get<TeamMember[]>('/team/members');
             set({ members: response.data, isLoading: false });
+            return data.invite_url;
         } catch (err: any) {
             set({ error: err.message || 'Failed to invite member', isLoading: false });
             throw err;

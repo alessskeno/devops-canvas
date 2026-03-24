@@ -9,7 +9,7 @@ services:
     container_name: devops-canvas-db
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-devops}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devops123}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env — see .env.example}
       POSTGRES_DB: ${POSTGRES_DB:-devopscanvas}
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -51,11 +51,11 @@ services:
       - PORT=8080
       - DB_HOST=postgres
       - DB_USER=${POSTGRES_USER:-devops}
-      - DB_PASSWORD=${POSTGRES_PASSWORD:-devops123}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       - DB_NAME=${POSTGRES_DB:-devopscanvas}
       - REDIS_ADDR=redis:6379
-      - JWT_SECRET=${JWT_SECRET:-supersecretkey}
-      - KIND_EXPERIMENTAL_DOCKER_NETWORK=devops-canvas-net
+      - JWT_SECRET=${JWT_SECRET:?Set JWT_SECRET in .env — see .env.example}
+      - APP_BASE_URL=${APP_BASE_URL:-http://localhost:3000}
     volumes:
       # Mount docker socket to allow orchestrating sibling containers
       - /var/run/docker.sock:/var/run/docker.sock
@@ -77,8 +77,6 @@ services:
       context: ./devops-canvas-frontend
       dockerfile: Dockerfile
     container_name: devops-canvas-ui
-    environment:
-      - VITE_API_URL=http://localhost:8080
     ports:
       - "3000:80"
     depends_on:

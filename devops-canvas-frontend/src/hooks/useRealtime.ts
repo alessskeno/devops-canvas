@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useAuthStore } from '../store/authStore';
-
-const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8080/api/ws';
+import { getRealtimeWebSocketUrl } from '../utils/apiOrigin';
 
 // Basic Container Stats from Docker
 export interface ContainerStat {
@@ -43,8 +42,7 @@ export const useRealtime = (workspaceId?: string) => {
         if (!user || !workspaceId) return;
 
         const connect = () => {
-            // Append workspace ID or token if needed for auth in future
-            ws.current = new WebSocket(WS_URL);
+            ws.current = new WebSocket(getRealtimeWebSocketUrl());
 
             ws.current.onopen = () => {
                 setIsConnected(true);

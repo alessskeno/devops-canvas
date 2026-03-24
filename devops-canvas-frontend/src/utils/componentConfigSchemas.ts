@@ -5,10 +5,14 @@ export interface ConfigField {
     options?: { label: string; value: string }[];
     dynamicOptions?: boolean; // If true, fetch options from API
     nodeType?: string; // For node-select: 'file' or other component types
+    /** For node-select: list every node of nodeType on the canvas (default: only nodes connected to this node). */
+    nodeSelectScope?: 'connected' | 'workspace';
     defaultValue?: any;
     placeholder?: string;
     helpText?: string;
     group?: string; // For grouping fields into tabs/accordions
+    /** If true, deployment will fail with an error if this field is not set */
+    required?: boolean;
 }
 
 export const COMPONENT_CONFIG_SCHEMAS: Record<string, ConfigField[]> = {
@@ -41,7 +45,7 @@ export const COMPONENT_CONFIG_SCHEMAS: Record<string, ConfigField[]> = {
     'postgres': [
                         { key: 'dbName', label: 'Database Name', type: 'text', defaultValue: 'app_db' },
         { key: 'user', label: 'User', type: 'text', defaultValue: 'postgres' },
-        { key: 'password', label: 'Password', type: 'password' },
+        { key: 'password', label: 'Password', type: 'password', required: true },
         { key: 'shared_buffers', label: 'Shared Buffers', type: 'text', placeholder: '128MB' },
         { key: 'work_mem', label: 'Work Memory', type: 'text', placeholder: '4MB' },
         { key: 'maintenance_work_mem', label: 'Maintenance Work Mem', type: 'text', placeholder: '64MB' },
@@ -58,7 +62,7 @@ export const COMPONENT_CONFIG_SCHEMAS: Record<string, ConfigField[]> = {
         }
     ],
     'mysql': [
-                        { key: 'root_password', label: 'Root Password', type: 'password' },
+                        { key: 'root_password', label: 'Root Password', type: 'password', required: true },
         { key: 'database', label: 'Database Name', type: 'text' },
         { key: 'user', label: 'User', type: 'text', placeholder: 'Optional app user' },
         { key: 'password', label: 'Password', type: 'password', placeholder: 'Optional app user password' },
@@ -112,7 +116,7 @@ export const COMPONENT_CONFIG_SCHEMAS: Record<string, ConfigField[]> = {
     ],
     'rabbitmq': [
         { key: 'default_user', label: 'Default User', type: 'text', defaultValue: 'guest' },
-        { key: 'default_pass', label: 'Default Password', type: 'password' },
+        { key: 'default_pass', label: 'Default Password', type: 'password', required: true },
         { key: 'channel_max', label: 'Channel Max', type: 'number', defaultValue: 0 },
         { key: 'max_length', label: 'Max Length (Messages)', type: 'number' },
         { key: 'max_length_bytes', label: 'Max Length (Bytes)', type: 'text' },
@@ -120,7 +124,14 @@ export const COMPONENT_CONFIG_SCHEMAS: Record<string, ConfigField[]> = {
     ],
 
     'prometheus': [
-                { key: 'retention', label: 'Retention Period', type: 'text', defaultValue: '15d', placeholder: 'e.g. 15d' },
+                {
+            key: 'alertmanager',
+            label: 'Alertmanager',
+            type: 'node-select',
+            nodeType: 'alertmanager',
+            placeholder: 'Select a connected Alertmanager'
+        },
+        { key: 'retention', label: 'Retention Period', type: 'text', defaultValue: '15d', placeholder: 'e.g. 15d' },
         { key: 'scrape_interval', label: 'Scrape Interval', type: 'text', defaultValue: '15s' },
         { key: 'scrape_timeout', label: 'Scrape Timeout', type: 'text', defaultValue: '10s' },
         { key: 'evaluation_interval', label: 'Evaluation Interval', type: 'text', defaultValue: '15s' },
@@ -140,8 +151,8 @@ export const COMPONENT_CONFIG_SCHEMAS: Record<string, ConfigField[]> = {
         }
     ],
     'grafana': [
-                { key: 'admin_user', label: 'Admin User', type: 'text', defaultValue: 'admin' },
-        { key: 'admin_password', label: 'Admin Password', type: 'password' },
+                { key: 'admin_user', label: 'Admin User', type: 'text', defaultValue: 'admin', required: true },
+        { key: 'admin_password', label: 'Admin Password', type: 'password', required: true },
         { key: 'allow_sign_up', label: 'Allow Sign Up', type: 'boolean', defaultValue: false }
     ],
     'alertmanager': [
@@ -152,16 +163,16 @@ export const COMPONENT_CONFIG_SCHEMAS: Record<string, ConfigField[]> = {
             key: 'buildContextId',
             label: 'Source Directory',
             type: 'folder-upload' as any,
-            helpText: 'Upload the folder containing your Dockerfile and source code'
+            helpText: 'Upload the folder containing your Dockerfile and source code. Draw edges from this node to databases, search, caches, etc. — at deploy time the API injects matching env vars (e.g. DATABASE_URL, MEILISEARCH_URL, REDIS_URL). Optional env vars in Config still override those keys.'
         }
     ],
     'mongodb': [
-                        { key: 'database', label: 'Database Name', type: 'text', defaultValue: 'app_db' },
-        { key: 'root_username', label: 'Root Username', type: 'text', defaultValue: 'admin' },
-        { key: 'root_password', label: 'Root Password', type: 'password' },
+        { key: 'database', label: 'Database Name', type: 'text', defaultValue: 'app_db' },
+        { key: 'root_username', label: 'Root Username', type: 'text', defaultValue: 'admin', required: true },
+        { key: 'root_password', label: 'Root Password', type: 'password', required: true },
     ],
     'mariadb': [
-                        { key: 'root_password', label: 'Root Password', type: 'password' },
+                        { key: 'root_password', label: 'Root Password', type: 'password', required: true },
         { key: 'database', label: 'Database Name', type: 'text' },
         { key: 'user', label: 'User', type: 'text', placeholder: 'Optional app user' },
         { key: 'password', label: 'Password', type: 'password', placeholder: 'Optional app user password' },
@@ -175,11 +186,11 @@ export const COMPONENT_CONFIG_SCHEMAS: Record<string, ConfigField[]> = {
         { key: 'database', label: 'Database Name', type: 'text', defaultValue: 'defaultdb' },
     ],
     'neo4j': [
-        { key: 'auth_password', label: 'Auth Password', type: 'password' },
+        { key: 'auth_password', label: 'Auth Password', type: 'password', required: true },
     ],
     'minio': [
-        { key: 'root_user', label: 'Root User', type: 'text', defaultValue: 'minioadmin' },
-        { key: 'root_password', label: 'Root Password', type: 'password' },
+        { key: 'root_user', label: 'Root User', type: 'text', defaultValue: 'minioadmin', required: true, helpText: 'At least 3 characters (MinIO requirement)' },
+        { key: 'root_password', label: 'Root Password', type: 'password', required: true, helpText: 'At least 8 characters (MinIO requirement)' },
     ],
     'nginx': [
         { key: 'config_file', label: 'Config File', type: 'node-select', nodeType: 'file', placeholder: 'Select a Config File Node' },
@@ -191,19 +202,18 @@ export const COMPONENT_CONFIG_SCHEMAS: Record<string, ConfigField[]> = {
         { key: 'public_folder', label: 'Public folder (htdocs)', type: 'text', defaultValue: './public', helpText: 'Host path mounted at /usr/local/apache2/htdocs' },
     ],
     'kong': [
-        { key: 'database', label: 'Database', type: 'select', options: [{ label: 'off (DB-less)', value: 'off' }, { label: 'postgres', value: 'postgres' }], defaultValue: 'off' },
+        { key: 'database', label: 'Database', type: 'select', options: [{ label: 'off (DB-less)', value: 'off' }, { label: 'postgres', value: 'postgres' }], defaultValue: 'off', helpText: 'A canvas connection to PostgreSQL switches Kong to Postgres mode and sets KONG_PG_* automatically. Connect at most one PostgreSQL node.' },
     ],
     'keycloak': [
-        { key: 'admin_user', label: 'Admin User', type: 'text', defaultValue: 'admin' },
-        { key: 'admin_password', label: 'Admin Password', type: 'password' },
+        { key: 'admin_user', label: 'Admin User', type: 'text', defaultValue: 'admin', required: true },
+        { key: 'admin_password', label: 'Admin Password', type: 'password', required: true },
     ],
     'vault': [
-        { key: 'dev_root_token', label: 'Dev Root Token', type: 'password', placeholder: 'myroot' },
+        { key: 'dev_root_token', label: 'Dev Root Token', type: 'password', placeholder: 'myroot', required: true },
     ],
     'supabase': [
-        { key: 'postgres_password', label: 'PostgreSQL Password', type: 'password', placeholder: 'Superuser password for Postgres' },
-        { key: 'anon_key', label: 'Anon Key (JWT)', type: 'password' },
-        { key: 'service_role_key', label: 'Service Role Key (JWT)', type: 'password' },
+        { key: 'anon_key', label: 'JWT secret (GOTRUE_JWT_SECRET)', type: 'password', helpText: 'Optional on canvas; if empty, set server env DEVOPS_CANVAS_GOTRUE_JWT_SECRET for deploy. Connect this node to PostgreSQL (required for deploy).' },
+        { key: 'service_role_key', label: 'Service role key (GOTRUE_SERVICE_ROLE_KEY)', type: 'password', helpText: 'Optional.' },
     ],
     'nats': [
         { key: 'jetstream', label: 'Enable JetStream', type: 'boolean', defaultValue: false },
@@ -224,8 +234,8 @@ export const COMPONENT_CONFIG_SCHEMAS: Record<string, ConfigField[]> = {
     ],
     'influxdb': [
         { key: 'init_mode', label: 'Init Mode', type: 'text', defaultValue: 'setup', helpText: 'DOCKER_INFLUXDB_INIT_MODE (setup or upgrade)' },
-        { key: 'username', label: 'Username', type: 'text', defaultValue: 'admin' },
-        { key: 'password', label: 'Password', type: 'password' },
+        { key: 'username', label: 'Username', type: 'text', defaultValue: 'admin', required: true },
+        { key: 'password', label: 'Password', type: 'password', required: true },
         { key: 'org', label: 'Organization', type: 'text', defaultValue: 'my-org' },
         { key: 'bucket', label: 'Bucket', type: 'text', defaultValue: 'my-bucket' },
     ],

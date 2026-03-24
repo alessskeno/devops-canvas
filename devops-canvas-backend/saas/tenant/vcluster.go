@@ -2,7 +2,8 @@ package tenant
 
 import (
 	"context"
-    "log"
+	"errors"
+	"log"
 )
 
 // VClusterProvisioner manages per-tenant vClusters
@@ -22,9 +23,8 @@ func (p *VClusterProvisioner) Provision(ctx context.Context, tenantID string) er
 }
 
 func (p *VClusterProvisioner) GetKubeConfig(ctx context.Context, tenantID string) ([]byte, error) {
-     log.Printf("SaaS: Fetching kubeconfig for tenant %s", tenantID)
-     // TODO: Retrieve secret from host cluster
-     return []byte("fake-vcluster-config"), nil
+	log.Printf("SaaS: Fetching kubeconfig for tenant %s", tenantID)
+	return nil, errors.New("vcluster kubeconfig retrieval is not implemented")
 }
 
 func (p *VClusterProvisioner) Deprovision(ctx context.Context, tenantID string) error {

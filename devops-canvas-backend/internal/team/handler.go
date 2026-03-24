@@ -72,13 +72,18 @@ func (h *Handler) InviteMember(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    if err := h.svc.InviteMember(r.Context(), req.Email, req.Role, userID); err != nil {
+    inviteURL, err := h.svc.InviteMember(r.Context(), req.Email, req.Role, userID)
+    if err != nil {
         h.respondError(w, http.StatusInternalServerError, "Failed to invite member")
         return
     }
 
+    w.Header().Set("Content-Type", "application/json")
     w.WriteHeader(http.StatusOK)
-    json.NewEncoder(w).Encode(map[string]string{"message": "Invitation sent"})
+    json.NewEncoder(w).Encode(map[string]string{
+        "message":    "Invitation created",
+        "invite_url": inviteURL,
+    })
 }
 
 func (h *Handler) UpdateRole(w http.ResponseWriter, r *http.Request) {

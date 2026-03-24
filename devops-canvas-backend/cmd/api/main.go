@@ -26,6 +26,10 @@ func main() {
 		log.Println("No .env file found")
 	}
 
+	if os.Getenv("JWT_SECRET") == "" {
+		log.Fatal("JWT_SECRET is required (set in environment or .env — see repo .env.example)")
+	}
+
 	// Connect to DB
 	db.Connect()
 	db.Migrate()

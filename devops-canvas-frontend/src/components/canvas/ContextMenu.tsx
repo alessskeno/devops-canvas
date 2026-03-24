@@ -1,5 +1,9 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useMemo } from 'react';
 import { Settings, Copy, FileText, Lock, Unlock, Trash2, Terminal as TerminalIcon } from 'lucide-react';
+
+const CONTEXT_MENU_WIDTH = 192; // w-48
+const CONTEXT_MENU_EST_HEIGHT = 248; // ~6 items + padding; keep in sync with content
+const VIEWPORT_PADDING = 8;
 
 interface ContextMenuProps {
     x: number;
@@ -20,6 +24,13 @@ export function ContextMenu({
     onClose, onEdit, onDuplicate, onLogs, onExec, onLock, onDelete
 }: ContextMenuProps) {
     const menuRef = useRef<HTMLDivElement>(null);
+
+    const { top, left } = useMemo(() => {
+        const fitsBelow = y + CONTEXT_MENU_EST_HEIGHT + VIEWPORT_PADDING <= window.innerHeight;
+        const top = fitsBelow ? y : Math.max(VIEWPORT_PADDING, y - CONTEXT_MENU_EST_HEIGHT);
+        const left = Math.max(VIEWPORT_PADDING, Math.min(x, window.innerWidth - CONTEXT_MENU_WIDTH - VIEWPORT_PADDING));
+        return { top, left };
+    }, [x, y]);
 
     // Close on click outside
     useEffect(() => {
@@ -55,8 +66,8 @@ export function ContextMenu({
     return (
         <div
             ref={menuRef}
-            style={{ top: y, left: x }}
-            className="fixed z-50 w-48 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 py-1 animate-in fade-in zoom-in-95 duration-100"
+            style={{ top, left }}
+            className="fixed z-50 w-48 max-h-[280px] overflow-y-auto bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 py-1 animate-in fade-in zoom-in-95 duration-100"
             onContextMenu={(e) => e.preventDefault()}
         >
             {items.map((item, index) => (

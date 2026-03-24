@@ -3,6 +3,7 @@ package translator
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"devops-canvas-backend/internal/models"
 
@@ -38,8 +39,8 @@ func (t *PostgresTranslator) Translate(node models.Node, ctx TranslationContext)
 		return nil, nil // Return nil to signal this component is disabled
 	}
 
-	// Default values
-	version := config.Version
+	// Default values — normalize version to a safe string (trim, default)
+	version := strings.TrimSpace(config.Version)
 	if version == "" {
 		version = "16"
 	}
@@ -79,54 +80,85 @@ func (t *PostgresTranslator) Translate(node models.Node, ctx TranslationContext)
 		command = append(command, "-c", "max_wal_size="+config.MaxWalSize)
 	}
 
-	// File Generation
-	generatedConfigs := make(map[string]string)
-
-	// Volume mount: path from central DefaultDataVolumeByType (defaults.go). Postgres 18+ overrides path and volume name.
+	// Volume mount: 18+ images require a single mount at /var/lib/postgresql (not .../data).
+	// See https://github.com/docker-library/postgres/pull/1259 and https://github.com/docker-library/postgres/issues/37
 	mountPath := DefaultDataVolumeByType["postgres"]
 	if mountPath == "" {
 		mountPath = "/var/lib/postgresql/data"
 	}
 	volumeName := "postgres_data_" + node.ID
 
-	if v, err := semver.NewVersion(version); err == nil {
+	// Effective tag: config version, or image override tag (so layout matches the image we actually run)
+	effectiveTag := version
+	var uConfig UniversalNodeConfig
+	_ = json.Unmarshal(node.Data, &uConfig)
+	if uConfig.Image != "" {
+		t := strings.TrimSpace(uConfig.Tag)
+		if t != "" {
+			effectiveTag = t
+		} else {
+			effectiveTag = "latest"
+		}
+	}
+
+	usePG18Layout := false
+	if v, err := semver.NewVersion(effectiveTag); err == nil {
 		if v.Major() >= 18 {
-			mountPath = "/var/lib/postgresql"
+			usePG18Layout = true
 			volumeName = fmt.Sprintf("postgres_data_v%d_%s", v.Major(), node.ID)
 		}
 	} else {
-		if len(version) >= 2 && version[:2] == "18" {
-			mountPath = "/var/lib/postgresql"
+		// "latest" or string starting with "18" → use 18+ layout (single mount at /var/lib/postgresql)
+		prefix18 := len(effectiveTag) >= 2 && effectiveTag[:2] == "18"
+		if strings.EqualFold(effectiveTag, "latest") || prefix18 {
+			usePG18Layout = true
 			volumeName = "postgres_data_v18_" + node.ID
 		}
+	}
+	if usePG18Layout {
+		mountPath = "/var/lib/postgresql"
 	}
 
 	volumes := []string{volumeName + ":" + mountPath}
 
-	// Handle pg_hba.conf
+	// Handle pg_hba.conf — use Compose top-level inline `configs:` + service `configs:` mounts.
+	// Bind-mounting ./configs/... breaks when the API runs in Docker: files live in the API
+	// container but the daemon resolves bind sources on the host, often creating a directory.
 	var rawData map[string]interface{}
 	_ = json.Unmarshal(node.Data, &rawData)
 
+	var composeInline map[string]string
+
 	if pgHbaNodeID, ok := rawData["pg_hba"].(string); ok && pgHbaNodeID != "" {
 		fileNode, err := ctx.FindNodeByID(pgHbaNodeID)
-		if err == nil {
-			var fileConfig ConfigFile
-			if err := json.Unmarshal(fileNode.Data, &fileConfig); err == nil {
-				fileName := fmt.Sprintf("pg_hba_%s.conf", node.ID)
-				generatedConfigs[fileName] = fileConfig.Content
-				volumes = append(volumes, fmt.Sprintf("./configs/%s:/etc/postgresql/pg_hba.conf", fileName))
-				command = append(command, "-c", "hba_file=/etc/postgresql/pg_hba.conf")
-			}
+		if err != nil {
+			return nil, fmt.Errorf("postgres: pg_hba file node not found: %w", err)
 		}
+		var fileConfig ConfigFile
+		if err := json.Unmarshal(fileNode.Data, &fileConfig); err != nil {
+			return nil, fmt.Errorf("postgres: invalid file node for pg_hba: %w", err)
+		}
+		content := strings.TrimSpace(fileConfig.Content)
+		if content == "" {
+			return nil, fmt.Errorf("postgres: linked pg_hba file node has no content")
+		}
+		// Stable unique key for top-level configs (hyphens OK in YAML keys).
+		cfgName := fmt.Sprintf("canvas_pg_hba_%s", strings.ReplaceAll(node.ID, "-", "_"))
+		composeInline = map[string]string{cfgName: content + "\n"}
 	}
 
 	compose := &ComposeService{
-		Image:       "postgres:" + SanitizeDockerVersion(version),
-		Ports:       []string{port + ":5432"},
-		Environment: env,
-		Volumes:     volumes,
-		Command:     command,
-		Restart:     "always",
+		Image:         "postgres:" + SanitizeDockerVersion(version),
+		Ports:         []string{port + ":5432"},
+		Environment:   env,
+		Volumes:       volumes,
+		Command:       command,
+		Restart:       "always",
+	}
+	if composeInline != nil {
+		cfgName := fmt.Sprintf("canvas_pg_hba_%s", strings.ReplaceAll(node.ID, "-", "_"))
+		compose.Configs = []ComposeConfigRef{{Source: cfgName, Target: "/etc/postgresql/pg_hba.conf"}}
+		compose.Command = append(compose.Command, "-c", "hba_file=/etc/postgresql/pg_hba.conf")
 	}
 
 	// Resource Limits for Docker Compose
@@ -153,7 +185,7 @@ func (t *PostgresTranslator) Translate(node models.Node, ctx TranslationContext)
 	}
 
 	return &GeneratedManifests{
-		DockerCompose: compose,
-		Configs:       generatedConfigs,
+		DockerCompose:       compose,
+		ComposeConfigInline: composeInline,
 	}, nil
 }

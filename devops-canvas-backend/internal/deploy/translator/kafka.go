@@ -35,20 +35,23 @@ func (t *KafkaTranslator) Translate(node models.Node, ctx TranslationContext) (*
 		version = "latest"
 	}
 
-	// For Kafka Single Node in Docker Compose using official Apache Kafka image (KRaft mode)
+	// Official apache/kafka image (KRaft): /etc/kafka/docker/run, log.dirs=/tmp/kraft-combined-logs by default.
+	// Dual listeners: INTERNAL:29092 for other compose services (advertised as service DNS name),
+	// EXTERNAL:9092 for host access via published port (advertised as localhost).
+	svcName := ComposeServiceNameForNode(node)
 	env := map[string]string{
-		"KAFKA_NODE_ID":                                  "1",
-		"KAFKA_PROCESS_ROLES":                            "controller,broker",
-		"KAFKA_LISTENERS":                                "PLAINTEXT://:9092,CONTROLLER://:9093",
-		"KAFKA_ADVERTISED_LISTENERS":                     "PLAINTEXT://localhost:9092",
-		"KAFKA_LISTENER_SECURITY_PROTOCOL_MAP":           "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT",
+		"KAFKA_NODE_ID":        "1",
+		"KAFKA_PROCESS_ROLES":  "controller,broker",
+		"KAFKA_LISTENERS":      "PLAINTEXT_INTERNAL://0.0.0.0:29092,PLAINTEXT_EXTERNAL://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093",
+		"KAFKA_ADVERTISED_LISTENERS": fmt.Sprintf("PLAINTEXT_INTERNAL://%s:29092,PLAINTEXT_EXTERNAL://localhost:9092", svcName),
+		"KAFKA_LISTENER_SECURITY_PROTOCOL_MAP":           "CONTROLLER:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT,PLAINTEXT_EXTERNAL:PLAINTEXT",
 		"KAFKA_CONTROLLER_QUORUM_VOTERS":                 "1@localhost:9093",
 		"KAFKA_CONTROLLER_LISTENER_NAMES":                "CONTROLLER",
-		"KAFKA_INTER_BROKER_LISTENER_NAME":               "PLAINTEXT",
+		"KAFKA_INTER_BROKER_LISTENER_NAME":               "PLAINTEXT_INTERNAL",
 		"KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR":         "1",
 		"KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR": "1",
 		"KAFKA_TRANSACTION_STATE_LOG_MIN_ISR":            "1",
-		"CLUSTER_ID":                                     "devops-canvas-kafka-cluster",
+		// CLUSTER_ID omitted: image sets a valid default in /etc/kafka/docker/configureDefaults
 	}
 
 	if config.RetentionMs != nil {

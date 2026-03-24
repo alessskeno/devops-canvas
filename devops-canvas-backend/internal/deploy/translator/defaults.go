@@ -21,45 +21,52 @@ func DataVolumeSlice(componentType, nodeID string) []string {
 	return []string{s}
 }
 
+// DefaultComposeImage holds default image, ports, and optional tag for generic components.
+// Tag is used when the node requests "latest" (or empty) but the registry has no :latest (e.g. supabase/gotrue).
+type DefaultComposeImage struct {
+	Image string
+	Ports []string
+	Tag   string
+}
+
 // DefaultComposeByType provides default Docker image and ports for component types
 // that use GenericTranslator (no dedicated translator). Ensures every runnable
 // component produces at least image, ports, and restart in generated docker-compose.
-var DefaultComposeByType = map[string]struct {
-	Image string
-	Ports []string
-}{
+var DefaultComposeByType = map[string]DefaultComposeImage{
 	// Databases (no dedicated translator)
-	"mongodb":     {"mongo", []string{"27017:27017"}},
-	"mariadb":     {"mariadb", []string{"3306:3306"}},
-	"cassandra":   {"cassandra", []string{"9042:9042"}},
-	"cockroachdb": {"cockroachdb/cockroach", []string{"26257:26257", "8080:8080"}},
-	"neo4j":       {"neo4j", []string{"7474:7474", "7687:7687"}},
+	"mongodb":     {Image: "mongo", Ports: []string{"27017:27017"}},
+	"mariadb":     {Image: "mariadb", Ports: []string{"3306:3306"}},
+	"cassandra":   {Image: "cassandra", Ports: []string{"9042:9042"}},
+	"cockroachdb": {Image: "cockroachdb/cockroach", Ports: []string{"26257:26257", "8080:8080"}},
+	"neo4j":       {Image: "neo4j", Ports: []string{"7474:7474", "7687:7687"}},
 
 	// Storage
-	"minio": {"minio/minio", []string{"9000:9000", "9001:9001"}},
+	"minio": {Image: "minio/minio", Ports: []string{"9000:9000", "9001:9001"}},
 
 	// Proxy & Gateway
-	"nginx":       {"nginx", []string{"80:80"}},
-	"traefik":     {"traefik", []string{"80:80", "8080:8080"}},
-	"apache-http": {"httpd", []string{"80:80"}},
-	"kong":        {"kong", []string{"8000:8000", "8001:8001"}},
+	"nginx":       {Image: "nginx", Ports: []string{"80:80"}},
+	"traefik":     {Image: "traefik", Ports: []string{"80:80", "8080:8080"}},
+	"apache-http": {Image: "httpd", Ports: []string{"80:80"}},
+	"kong":        {Image: "kong", Ports: []string{"8000:8000", "8001:8001"}},
 
 	// Auth & Security
-	"keycloak": {"quay.io/keycloak/keycloak", []string{"8080:8080"}},
-	"vault":    {"hashicorp/vault", []string{"8200:8200"}},
-	"supabase": {"supabase/gotrue", []string{"9999:9999"}}, // placeholder; supabase is multi-service
+	"keycloak": {Image: "quay.io/keycloak/keycloak", Ports: []string{"8080:8080"}},
+	"vault":    {Image: "hashicorp/vault", Ports: []string{"8200:8200"}},
+	// GoTrue has no :latest on Docker Hub; pin a published release (auth API only — full Supabase is multi-service).
+	"supabase": {Image: "supabase/gotrue", Ports: []string{"9999:9999"}, Tag: "v2.188.1"},
 
 	// Messaging
-	"nats": {"nats", []string{"4222:4222", "8222:8222", "6222:6222"}},
+	"nats": {Image: "nats", Ports: []string{"4222:4222", "8222:8222", "6222:6222"}},
 
 	// Search
-	"elasticsearch": {"elasticsearch", []string{"9200:9200"}},
-	"meilisearch":   {"getmeili/meilisearch", []string{"7700:7700"}},
-	"opensearch":    {"opensearchproject/opensearch", []string{"9200:9200", "9600:9600"}},
+	// Docker Hub library/elasticsearch has no usable :latest; Elastic distributes images on docker.elastic.co.
+	"elasticsearch": {Image: "docker.elastic.co/elasticsearch/elasticsearch", Ports: []string{"9200:9200"}, Tag: "8.17.3"},
+	"meilisearch":   {Image: "getmeili/meilisearch", Ports: []string{"7700:7700"}},
+	"opensearch":    {Image: "opensearchproject/opensearch", Ports: []string{"9200:9200", "9600:9600"}},
 
 	// Monitoring (beyond prometheus/grafana/alertmanager which have dedicated translators)
-	"influxdb": {"influxdb", []string{"8086:8086"}},
-	"jaeger":   {"jaegertracing/all-in-one", []string{"16686:16686", "14268:14268"}},
+	"influxdb": {Image: "influxdb", Ports: []string{"8086:8086"}},
+	"jaeger":   {Image: "jaegertracing/all-in-one", Ports: []string{"16686:16686", "14268:14268"}},
 }
 
 // DefaultDataVolumeByType is the single source of truth for persistent data volume mount paths.
@@ -87,7 +94,6 @@ var DefaultDataVolumeByType = map[string]string{
 	"neo4j":         "/data",
 	"minio":         "/data",
 	"vault":         "/vault/data",
-	"supabase":      "/var/lib/postgresql/data",
 	"elasticsearch": "/usr/share/elasticsearch/data",
 	"meilisearch":   "/meili_data",
 	"opensearch":    "/usr/share/opensearch/data",

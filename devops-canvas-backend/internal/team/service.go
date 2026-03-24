@@ -1,10 +1,13 @@
 package team
 
 import (
-    "context"
-    "crypto/rand"
-    "encoding/hex"
-    "log"
+	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"log"
+	"net/url"
+	"os"
+	"strings"
 )
 
 type Service struct {
@@ -19,22 +22,34 @@ func (s *Service) ListMembers(ctx context.Context) ([]TeamMember, error) {
     return s.repo.ListMembers(ctx)
 }
 
-func (s *Service) InviteMember(ctx context.Context, email, role, createdBy string) error {
-    // Generate simple token
-    bytes := make([]byte, 16)
-    if _, err := rand.Read(bytes); err != nil {
-        return err
-    }
-    token := hex.EncodeToString(bytes)
+// InviteMember stores the invitation and returns a full URL the inviter can share (email is optional).
+func (s *Service) InviteMember(ctx context.Context, email, role, createdBy string) (inviteURL string, err error) {
+	bytes := make([]byte, 16)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	token := hex.EncodeToString(bytes)
 
-    if err := s.repo.CreateInvitation(ctx, email, role, token, createdBy); err != nil {
-        return err
-    }
+	if err := s.repo.CreateInvitation(ctx, email, role, token, createdBy); err != nil {
+		return "", err
+	}
 
-    // MOCK EMAIL SENDING
-    log.Printf("[MOCK EMAIL] Invitation sent to %s with role %s. Link: http://localhost/accept-invite?token=%s", email, role, token)
+	base := strings.TrimRight(strings.TrimSpace(os.Getenv("APP_BASE_URL")), "/")
+	if base == "" {
+		base = "http://localhost:3000"
+	}
+	u, err := url.Parse(base)
+	if err != nil {
+		return "", err
+	}
+	q := u.Query()
+	q.Set("token", token)
+	u.Path = strings.TrimSuffix(u.Path, "/") + "/accept-invite"
+	u.RawQuery = q.Encode()
+	inviteURL = u.String()
 
-    return nil
+	log.Printf("team: invitation created for %s (role=%s)", email, role)
+	return inviteURL, nil
 }
 
 func (s *Service) UpdateMemberRole(ctx context.Context, id, role string) error {

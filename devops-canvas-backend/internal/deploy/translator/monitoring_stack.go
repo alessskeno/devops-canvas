@@ -28,6 +28,113 @@ func getFileContent(ctx TranslationContext, nodeID string) (string, error) {
 	return fileConfig.Content, nil
 }
 
+// normalizePrometheusScrapeJobs fixes common YAML mistakes. Prometheus does not allow a top-level
+// `labels` field on a scrape job; labels belong under each static_configs entry.
+func normalizePrometheusScrapeJobs(jobs []interface{}) []interface{} {
+	out := make([]interface{}, 0, len(jobs))
+	for _, j := range jobs {
+		m, ok := j.(map[string]interface{})
+		if !ok {
+			out = append(out, j)
+			continue
+		}
+		jobLabels := stringMapFromYAMLValue(m["labels"])
+		if len(jobLabels) == 0 {
+			out = append(out, m)
+			continue
+		}
+		statics, ok := m["static_configs"].([]interface{})
+		if !ok || len(statics) == 0 {
+			delete(m, "labels")
+			out = append(out, m)
+			continue
+		}
+		for _, sc := range statics {
+			smc, ok := sc.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			existing := stringMapFromYAMLValue(smc["labels"])
+			if existing == nil {
+				existing = make(map[string]interface{})
+			}
+			for k, v := range jobLabels {
+				if _, set := existing[k]; !set {
+					existing[k] = v
+				}
+			}
+			smc["labels"] = existing
+		}
+		delete(m, "labels")
+		out = append(out, m)
+	}
+	return out
+}
+
+func stringMapFromYAMLValue(v interface{}) map[string]interface{} {
+	switch m := v.(type) {
+	case map[string]interface{}:
+		return m
+	case map[interface{}]interface{}:
+		out := make(map[string]interface{}, len(m))
+		for k, val := range m {
+			out[fmt.Sprintf("%v", k)] = val
+		}
+		return out
+	default:
+		return nil
+	}
+}
+
+// normalizePrometheusRulesYAML fixes templates that break Prometheus 3+ rule annotation parsing:
+// a literal `%` immediately after `}}` is treated as starting a template command ("missing value for command").
+// We rewrite common "{{ $value }}%" patterns to humanizePercentage; any remaining "}}%" gets a space before `%`.
+// collectPrometheusAlertmanagerPeers returns enabled alertmanager nodes wired via canvas edges and/or
+// an explicit node ID in Prometheus config (edges are not persisted until the workspace is saved).
+func collectPrometheusAlertmanagerPeers(ctx TranslationContext, promNode models.Node, explicitAlertmanagerID string) []models.Node {
+	seen := make(map[string]bool)
+	var peers []models.Node
+
+	add := func(n *models.Node) {
+		if n == nil || !strings.EqualFold(strings.TrimSpace(n.Type), "alertmanager") || !NodeEnabledForDeploy(*n) {
+			return
+		}
+		if seen[n.ID] {
+			return
+		}
+		seen[n.ID] = true
+		peers = append(peers, *n)
+	}
+
+	connected, _ := ctx.FindConnectedNodes(promNode.ID)
+	for i := range connected {
+		add(&connected[i])
+	}
+
+	id := strings.TrimSpace(explicitAlertmanagerID)
+	if id != "" {
+		if n, err := ctx.FindNodeByID(id); err == nil {
+			add(n)
+		}
+	}
+
+	return peers
+}
+
+func normalizePrometheusRulesYAML(s string) string {
+	replacements := []struct{ old, new string }{
+		{"{{ $value }}%", "{{ humanizePercentage $value }}"},
+		{"{{$value}}%", "{{ humanizePercentage $value }}"},
+		{"{{ .Value }}%", "{{ humanizePercentage .Value }}"},
+		{"{{.Value}}%", "{{ humanizePercentage .Value }}"},
+	}
+	for _, r := range replacements {
+		s = strings.ReplaceAll(s, r.old, r.new)
+	}
+	s = strings.ReplaceAll(s, "}}%", "}} %")
+	return s
+}
+
 // ===== Prometheus Translator =====
 
 type PrometheusConfig struct {
@@ -39,6 +146,7 @@ type PrometheusConfig struct {
 	EvaluationInterval string `json:"evaluation_interval"`
 	ScrapeConfigs      string `json:"scrape_configs"` // NodeID of file node
 	RulesFiles         string `json:"rules_files"`    // NodeID of file node
+	Alertmanager       string `json:"alertmanager,omitempty"`
 }
 
 type PrometheusTranslator struct{}
@@ -117,58 +225,99 @@ func (t *PrometheusTranslator) Translate(node models.Node, ctx TranslationContex
 			}
 
 			if parseErr == nil && len(userScrapes) > 0 {
+				userScrapes = normalizePrometheusScrapeJobs(userScrapes)
 				currentScrapes := promConfig["scrape_configs"].([]interface{})
 				promConfig["scrape_configs"] = append(currentScrapes, userScrapes...)
 			}
 		}
 	}
 
+	// Wire Alertmanager: canvas edges (when saved) and/or explicit Alertmanager node ID in config.
+	amPeers := collectPrometheusAlertmanagerPeers(ctx, node, config.Alertmanager)
+	var alertmanagerTargets []string
+	var alertmanagerSvcNames []string
+	for _, peer := range amPeers {
+		svcName := ComposeServiceNameForNode(peer)
+		alertmanagerSvcNames = append(alertmanagerSvcNames, svcName)
+		alertmanagerTargets = append(alertmanagerTargets, fmt.Sprintf("%s:9093", svcName))
+	}
+	if len(alertmanagerTargets) > 0 {
+		promConfig["alerting"] = map[string]interface{}{
+			"alertmanagers": []interface{}{
+				map[string]interface{}{
+					"static_configs": []interface{}{
+						map[string]interface{}{
+							"targets": alertmanagerTargets,
+						},
+					},
+				},
+			},
+		}
+	}
+
 	// Handle rules
+	id4 := node.ID[:4]
+	promFile := fmt.Sprintf("prometheus-%s.yml", id4)
+	rulesFile := fmt.Sprintf("rules-%s.yml", id4)
+
 	if rulesContent != "" {
+		rc := normalizePrometheusRulesYAML(rulesContent)
 		var dockerRulesContent string
 		var header struct {
 			Kind string      `yaml:"kind"`
 			Spec interface{} `yaml:"spec"`
 		}
-		if err := yaml.Unmarshal([]byte(rulesContent), &header); err == nil && header.Kind == "PrometheusRule" {
+		if err := yaml.Unmarshal([]byte(rc), &header); err == nil && header.Kind == "PrometheusRule" {
 			specBytes, _ := yaml.Marshal(header.Spec)
 			dockerRulesContent = string(specBytes)
 		} else {
-			dockerRulesContent = rulesContent
+			dockerRulesContent = rc
 		}
-		promConfig["rule_files"] = []string{"/etc/prometheus/rules.yml"}
-		configs[fmt.Sprintf("rules-%s.yml", node.ID[:4])] = dockerRulesContent
+		promConfig["rule_files"] = []string{"/etc/prometheus/canvas-rules.yml"}
+		configs[rulesFile] = dockerRulesContent
 	}
 
 	promConfigBytes, _ := yaml.Marshal(promConfig)
-	configs[fmt.Sprintf("prometheus-%s.yml", node.ID[:4])] = string(promConfigBytes)
+	configs[promFile] = string(promConfigBytes)
 
 	// Prepare deploy config
 	deployConfig := buildDeployConfig(config.Resources)
 
 	vols := DataVolumeSlice("prometheus", node.ID)
-	vols = append(vols, fmt.Sprintf("./configs/prometheus-%s.yml:/etc/prometheus/prometheus.yml", node.ID[:4]))
+	promCfgName := fmt.Sprintf("prometheus_config_%s", id4)
+	inline := map[string]string{promCfgName: configs[promFile]}
+	cfgMounts := []ComposeConfigRef{{Source: promCfgName, Target: "/etc/prometheus/canvas-prometheus.yml"}}
+
+	if rulesContent != "" {
+		rulesCfgName := fmt.Sprintf("prometheus_rules_%s", id4)
+		inline[rulesCfgName] = configs[rulesFile]
+		cfgMounts = append(cfgMounts, ComposeConfigRef{Source: rulesCfgName, Target: "/etc/prometheus/canvas-rules.yml"})
+	}
+
 	svc := ComposeService{
-		Image: "prom/prometheus:latest",
-		Ports: []string{fmt.Sprintf("%v:9090", defaultPort(config.Port, 9090))},
+		Image:   "prom/prometheus:latest",
+		Ports:   []string{fmt.Sprintf("%v:9090", defaultPort(config.Port, 9090))},
 		Volumes: vols,
+		Configs: cfgMounts,
 		Command: []string{
-			"--config.file=/etc/prometheus/prometheus.yml",
+			"--config.file=/etc/prometheus/canvas-prometheus.yml",
 			"--storage.tsdb.path=/prometheus",
 			"--storage.tsdb.retention.time=" + config.Retention,
 		},
 		Restart: "always",
 		Deploy:  deployConfig,
 	}
-
-	if rulesContent != "" {
-		svc.Volumes = append(svc.Volumes,
-			fmt.Sprintf("./configs/rules-%s.yml:/etc/prometheus/rules.yml", node.ID[:4]))
+	if len(alertmanagerSvcNames) > 0 {
+		svc.DependsOn = &DependsOnSpec{}
+		for _, dep := range alertmanagerSvcNames {
+			svc.DependsOn.AppendStarted(dep)
+		}
 	}
 
 	return &GeneratedManifests{
-		DockerCompose: &svc,
-		Configs:       configs,
+		DockerCompose:       &svc,
+		Configs:             configs,
+		ComposeConfigInline: inline,
 	}, nil
 }
 
@@ -194,9 +343,6 @@ func (t *GrafanaTranslator) Translate(node models.Node, ctx TranslationContext) 
 
 	if config.AdminUser == "" {
 		config.AdminUser = "admin"
-	}
-	if config.AdminPassword == "" {
-		config.AdminPassword = "admin"
 	}
 
 	deployConfig := buildDeployConfig(config.Resources)
@@ -255,24 +401,30 @@ func (t *AlertmanagerTranslator) Translate(node models.Node, ctx TranslationCont
 
 	// Generate alertmanager config
 	alertmanagerConfigContent := generateAlertmanagerConfigStandalone(config)
-	configs[fmt.Sprintf("alertmanager-%s.yml", node.ID[:4])] = alertmanagerConfigContent
+	amFile := fmt.Sprintf("alertmanager-%s.yml", node.ID[:4])
+	configs[amFile] = alertmanagerConfigContent
 
 	deployConfig := buildDeployConfig(config.Resources)
 
 	vols := DataVolumeSlice("alertmanager", node.ID)
-	vols = append(vols, fmt.Sprintf("./configs/alertmanager-%s.yml:/etc/alertmanager/config.yml", node.ID[:4]))
+	amCfgName := fmt.Sprintf("alertmanager_config_%s", node.ID[:4])
 	svc := ComposeService{
-		Image: "prom/alertmanager:latest",
-		Ports: []string{fmt.Sprintf("%v:9093", defaultPort(config.Port, 9093))},
+		Image:   "prom/alertmanager:latest",
+		Ports:   []string{fmt.Sprintf("%v:9093", defaultPort(config.Port, 9093))},
 		Volumes: vols,
-		Command: []string{"--storage.path=/alertmanager", "--config.file=/etc/alertmanager/config.yml"},
+		Configs: []ComposeConfigRef{{Source: amCfgName, Target: "/etc/alertmanager/canvas-config.yml"}},
+		Command: []string{
+			"--storage.path=/alertmanager",
+			"--config.file=/etc/alertmanager/canvas-config.yml",
+		},
 		Restart: "always",
 		Deploy:  deployConfig,
 	}
 
 	return &GeneratedManifests{
-		DockerCompose: &svc,
-		Configs:       configs,
+		DockerCompose:       &svc,
+		Configs:             configs,
+		ComposeConfigInline: map[string]string{amCfgName: configs[amFile]},
 	}, nil
 }
 

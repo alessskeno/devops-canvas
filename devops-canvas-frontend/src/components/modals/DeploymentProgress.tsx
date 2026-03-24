@@ -69,8 +69,8 @@ export function DeploymentProgress({ isOpen, onClose, onCancel, logs, steps }: D
                                     </span>
                                 </div>
                                 {step.status === 'error' && step.details && (
-                                    <div className="ml-9 mt-1 text-xs text-red-600 dark:text-red-400 font-mono break-words bg-red-100 dark:bg-red-900/20 p-2 rounded border border-red-200 dark:border-red-800/50">
-                                        Error: {step.details}
+                                    <div className="ml-9 mt-1 text-xs text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/20 p-2 rounded border border-red-200 dark:border-red-800/50 max-h-52 overflow-y-auto">
+                                        <pre className="whitespace-pre-wrap break-words font-sans">{step.details}</pre>
                                     </div>
                                 )}
                             </div>
@@ -93,6 +93,15 @@ export function DeploymentProgress({ isOpen, onClose, onCancel, logs, steps }: D
                         )}
                     </div>
                 </div>
+
+                {logs.length > 0 && (
+                    <div className="border-t border-gray-200 dark:border-slate-700 pt-4">
+                        <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">Deploy log</p>
+                        <div className="max-h-48 overflow-y-auto rounded-md bg-slate-50 dark:bg-slate-900/80 border border-gray-200 dark:border-slate-700 p-2 text-[11px] font-mono text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words">
+                            {logs.join('\n')}
+                        </div>
+                    </div>
+                )}
 
                 <div className="flex justify-end space-x-3">
                     {!isComplete ? (

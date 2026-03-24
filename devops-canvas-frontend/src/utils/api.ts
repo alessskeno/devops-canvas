@@ -1,8 +1,9 @@
 /// <reference types="vite/client" />
 import axios from 'axios';
 import { ApiError } from '../types';
+import { getApiBase } from './apiOrigin';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
+const API_URL = getApiBase();
 
 const api = axios.create({
     baseURL: API_URL,

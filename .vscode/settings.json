@@ -8,8 +8,8 @@
             "driver": "PostgreSQL",
             "database": "devopscanvas",
             "username": "devops",
-            "password": "devops123",
-            "name": "devopscanvas"
+            "password": "",
+            "name": "devopscanvas (set password locally; do not commit secrets)"
         }
     ]
 }

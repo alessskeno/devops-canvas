@@ -58,7 +58,7 @@ export function LoginPage() {
                     <Input
                         label="Email address"
                         type="email"
-                        placeholder="admin@devopscanvas.io"
+                        placeholder="you@example.com"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         error={errors.email}
@@ -86,7 +86,7 @@ export function LoginPage() {
                 </form>
 
                 <div className="mt-6 text-center text-sm text-slate-600 dark:text-slate-500">
-                    Need help? <a href="mailto:support@devopscanvas.io" className="text-blue-600 hover:underline">Contact Support</a>
+                    Need help? <a href="mailto:support@example.com" className="text-blue-600 hover:underline">Contact Support</a>
                 </div>
             </div>
         </div>

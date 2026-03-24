@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/docker/docker/client"
 	"github.com/go-chi/chi/v5"
@@ -72,7 +73,7 @@ func main() {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"https://app.devopscanvas.com", "http://localhost:3000"}, // SaaS Domains
+		AllowedOrigins:   saasCorsAllowedOrigins(),
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 		ExposedHeaders:   []string{"Link"},
@@ -144,4 +145,21 @@ func main() {
 	if err := http.ListenAndServe(":"+port, r); err != nil {
 		log.Fatalf("Server failed to start: %v", err)
 	}
+}
+
+// saasCorsAllowedOrigins returns CORS_ALLOWED_ORIGINS (comma-separated) or local dev defaults.
+func saasCorsAllowedOrigins() []string {
+	if v := strings.TrimSpace(os.Getenv("CORS_ALLOWED_ORIGINS")); v != "" {
+		parts := strings.Split(v, ",")
+		var out []string
+		for _, p := range parts {
+			if s := strings.TrimSpace(p); s != "" {
+				out = append(out, s)
+			}
+		}
+		if len(out) > 0 {
+			return out
+		}
+	}
+	return []string{"http://localhost:3000", "http://localhost:80", "http://127.0.0.1:3000"}
 }

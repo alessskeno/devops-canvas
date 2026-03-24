@@ -48,8 +48,7 @@ var ToolOptionsEnv = map[string]map[string]string{
 		"dev_root_token": "VAULT_DEV_ROOT_TOKEN_ID",
 	},
 	"supabase": {
-		"postgres_password":  "POSTGRES_PASSWORD",
-		"anon_key":          "GOTRUE_JWT_SECRET",
+		"anon_key":         "GOTRUE_JWT_SECRET",
 		"service_role_key": "GOTRUE_SERVICE_ROLE_KEY",
 	},
 	"nats": {},

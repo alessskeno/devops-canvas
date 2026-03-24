@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 
 	"devops-canvas-backend/internal/auth"
 	"devops-canvas-backend/internal/deploy/translator"
@@ -55,6 +56,10 @@ func (h *Handler) DeployWorkspace(w http.ResponseWriter, r *http.Request) {
 	workspaceID := chi.URLParam(r, "workspaceID")
 	status, err := h.svc.DeployWorkspace(r.Context(), workspaceID)
 	if err != nil {
+		if cu, ok := AsComposeUpError(err); ok {
+			h.respondErrorWithDetails(w, http.StatusInternalServerError, "Deployment failed: "+cu.Summary, cu.Full)
+			return
+		}
 		h.respondError(w, http.StatusInternalServerError, "Deployment failed: "+err.Error())
 		return
 	}
@@ -168,6 +173,23 @@ func (h *Handler) respondError(w http.ResponseWriter, code int, message string) 
 	json.NewEncoder(w).Encode(map[string]string{
 		"message": message,
 		"code":    http.StatusText(code),
+	})
+}
+
+const maxErrorDetailsRunes = 60000
+
+func (h *Handler) respondErrorWithDetails(w http.ResponseWriter, code int, message, details string) {
+	details = strings.TrimSpace(details)
+	if details != "" && utf8.RuneCountInString(details) > maxErrorDetailsRunes {
+		runes := []rune(details)
+		details = string(runes[:maxErrorDetailsRunes-1]) + "…"
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"message": message,
+		"code":    http.StatusText(code),
+		"details": details,
 	})
 }
 

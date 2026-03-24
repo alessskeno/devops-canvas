@@ -17,12 +17,12 @@ import (
 func (s *Service) ExecShell(ctx context.Context, workspaceID, componentID, cmdStr string, in io.Reader, out io.Writer, resizeChan <-chan remotecommand.TerminalSize) error {
 	targetServiceName := ""
 
-	// Resolve Component ID to Service Name
+	// Resolve Component ID to Service Name (same as in compose: default type-id4 or custom ServiceName from component settings)
 	canvas, err := s.workspaceRepo.GetCanvas(ctx, workspaceID)
 	if err == nil {
 		for _, node := range canvas.Nodes {
 			if node.ID == componentID {
-				targetServiceName = fmt.Sprintf("%s-%s", node.Type, node.ID[:4])
+				targetServiceName = resolveServiceNameForNode(node)
 				break
 			}
 		}

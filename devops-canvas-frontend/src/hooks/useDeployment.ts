@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import { toast } from 'sonner';
+import { userFacingDeployError } from '../utils/deployError';
 
 interface DeploymentStep {
     label: string;
@@ -70,8 +71,30 @@ export function useDeployment(workspaceId: string | undefined) {
                 toast.error("Deployment Cancelled");
                 setDeployLogs(prev => [...prev, "Deployment cancelled by user."]);
             } else {
-                console.error(error);
-                toast.error("Deployment Failed");
+                const raw =
+                    error.response?.data?.message ||
+                    error.response?.data?.error ||
+                    error.message ||
+                    'Deployment failed';
+                const msg = userFacingDeployError(typeof raw === 'string' ? raw : String(raw));
+                const technical =
+                    (error as { details?: string }).details ??
+                    error.response?.data?.details;
+                const techStr =
+                    technical != null && String(technical).trim() !== '' ? String(technical).trim() : '';
+
+                // One concise toast; full output only in the modal Deploy log (avoids triplicating the same daemon dump).
+                if (techStr) {
+                    toast.error('Deployment failed', {
+                        description: 'See Deploy log in this window for the full error.',
+                        duration: 6000
+                    });
+                    setDeployLogs((prev) => [...prev, techStr]);
+                } else {
+                    const brief = msg.length > 120 ? `${msg.slice(0, 117)}…` : msg;
+                    toast.error('Deployment failed', { description: brief, duration: 8000 });
+                    setDeployLogs((prev) => [...prev, msg]);
+                }
             }
         }
     };

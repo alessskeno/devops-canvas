@@ -23,8 +23,9 @@ var DockerHubVersionMap = map[string]struct {
 	"postgres":   {"postgres", []string{"17.2", "17.1", "17.0", "16.6", "16.5", "16.4", "15.10", "15.9", "14.15", "13.18"}},
 	"redis":      {"redis", []string{"7.4", "7.2", "7.0", "6.2"}},
 	"mysql":      {"mysql", []string{"9.1", "9.0", "8.4", "8.0", "5.7"}},
-	"kafka":      {"bitnami/kafka", []string{"3.9", "3.8", "3.7", "3.6"}},
-	"clickhouse": {"clickhouse/clickhouse-server", []string{"24.12", "24.11", "24.10", "24.8", "24.3", "23.12", "23.8"}},
+	"kafka":      {"apache/kafka", []string{"latest", "4.0.0", "3.9.1", "3.9.0"}},
+	"elasticsearch": {"docker.elastic.co/elasticsearch/elasticsearch", []string{"8.17.3", "8.16.6", "8.15.5", "8.14.3"}},
+	"clickhouse":    {"clickhouse/clickhouse-server", []string{"24.12", "24.11", "24.10", "24.8", "24.3", "23.12", "23.8"}},
 	"rabbitmq":   {"rabbitmq", []string{"4.0", "3.13", "3.12"}},
 	"valkey":     {"valkey/valkey", []string{"8.0", "7.2"}},
 }
