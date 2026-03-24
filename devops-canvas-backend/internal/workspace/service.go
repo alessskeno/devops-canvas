@@ -101,7 +101,11 @@ func (s *Service) DuplicateWorkspace(ctx context.Context, sourceID, userID strin
 }
 
 func (s *Service) SaveCanvas(ctx context.Context, workspaceID string, userID string, state models.CanvasState) error {
-    return s.repo.SaveCanvas(ctx, workspaceID, userID, state.Nodes, state.Connections)
+	return s.repo.SaveCanvas(ctx, workspaceID, userID, state)
+}
+
+func (s *Service) SaveCanvasViewport(ctx context.Context, workspaceID string, userID string, vp *models.CanvasViewport) error {
+	return s.repo.SaveCanvasViewport(ctx, workspaceID, userID, vp)
 }
 
 func (s *Service) GetCanvas(ctx context.Context, workspaceID string) (*models.CanvasState, error) {

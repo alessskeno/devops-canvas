@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
     LayoutDashboard,
     Users,
@@ -15,8 +15,10 @@ import { useNavigate } from 'react-router-dom';
 import { cn } from '../../utils/cn';
 import { Button } from '../shared/Button';
 import { Input } from '../shared/Input';
-import { useTeamStore, TeamMember } from '../../store/teamStore';
+import { useTeamStore } from '../../store/teamStore';
 import { useAuthStore } from '../../store/authStore';
+import { useWorkspaceStore } from '../../store/workspaceStore';
+import { formatRelativeTime, getDisplayInitials } from '../../utils/relativeTime';
 import { toast } from 'sonner';
 import { RoleBadge } from './RoleBadge';
 
@@ -32,12 +34,30 @@ export default function TeamLayout() {
 
     // Store integration
     const { members, fetchMembers, inviteMember, updateRole, removeMember } = useTeamStore();
+    const { workspaces, fetchWorkspaces } = useWorkspaceStore();
     const { user } = useAuthStore();
     const teamMembers = members || [];
 
     React.useEffect(() => {
         fetchMembers();
     }, [fetchMembers]);
+
+    React.useEffect(() => {
+        fetchWorkspaces();
+    }, [fetchWorkspaces]);
+
+    const workspaceActivity = useMemo(() => {
+        return [...workspaces]
+            .sort((a, b) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime())
+            .slice(0, 10)
+            .map((w) => ({
+                id: w.id,
+                user: w.last_updated_by_name?.trim() || 'Someone',
+                target: w.name,
+                time: formatRelativeTime(w.lastModified),
+                initials: getDisplayInitials(w.last_updated_by_name || 'User'),
+            }));
+    }, [workspaces]);
 
 
     const menuItems = [
@@ -132,30 +152,34 @@ export default function TeamLayout() {
                                         <span className="text-sm font-medium text-gray-500 dark:text-gray-400">Active Workspaces</span>
                                         <Layers size={18} className="text-green-500" />
                                     </div>
-                                    <div className="text-3xl font-bold text-gray-900 dark:text-white">2</div>
+                                    <div className="text-3xl font-bold text-gray-900 dark:text-white">
+                                        {workspaces.filter((w) => w.componentCount > 0).length}
+                                    </div>
                                 </div>
                             </div>
 
                             <div>
                                 <h3 className="font-medium text-gray-900 dark:text-white text-sm mb-4">Recent Activity</h3>
                                 <div className="space-y-4">
-                                    {[
-                                        { user: 'Jane Doe', action: 'deployed', target: 'E-commerce Backend', time: '2 hours ago' },
-                                        { user: 'Mike Ross', action: 'updated config', target: 'Redis Cache', time: '5 hours ago' },
-                                        { user: 'Sarah Conner', action: 'added member', target: 'Alex Murphy', time: '1 day ago' },
-                                    ].map((activity) => (
-                                        <div key={`${activity.user}-${activity.time}`} className="flex items-center gap-3 text-sm">
-                                            <div className="h-8 w-8 rounded-full bg-gray-100 dark:bg-slate-800 flex items-center justify-center text-xs font-bold text-gray-600 dark:text-gray-300">
-                                                {activity.user.charAt(0)}
+                                    {workspaceActivity.length === 0 ? (
+                                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                                            No workspace updates yet. Edit a workspace canvas to see activity here.
+                                        </p>
+                                    ) : (
+                                        workspaceActivity.map((activity) => (
+                                            <div key={activity.id} className="flex items-center gap-3 text-sm">
+                                                <div className="h-8 w-8 rounded-full bg-gray-100 dark:bg-slate-800 flex items-center justify-center text-[10px] font-bold text-gray-600 dark:text-gray-300 shrink-0">
+                                                    {activity.initials}
+                                                </div>
+                                                <div className="min-w-0 flex-1">
+                                                    <span className="font-medium text-gray-900 dark:text-white">{activity.user}</span>
+                                                    <span className="text-gray-500 dark:text-gray-400"> updated workspace </span>
+                                                    <span className="font-medium text-gray-900 dark:text-white">{activity.target}</span>
+                                                </div>
+                                                <span className="text-xs text-gray-400 shrink-0">{activity.time}</span>
                                             </div>
-                                            <div>
-                                                <span className="font-medium text-gray-900 dark:text-white">{activity.user}</span>
-                                                <span className="text-gray-500 dark:text-gray-400"> {activity.action} </span>
-                                                <span className="font-medium text-gray-900 dark:text-white">{activity.target}</span>
-                                            </div>
-                                            <span className="text-xs text-gray-400 ml-auto">{activity.time}</span>
-                                        </div>
-                                    ))}
+                                        ))
+                                    )}
                                 </div>
                             </div>
                         </div>

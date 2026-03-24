@@ -26,7 +26,15 @@ type Connection struct {
 	CreatedAt    time.Time `json:"created_at" db:"created_at"`
 }
 
+// CanvasViewport is the React Flow pan/zoom state persisted per workspace.
+type CanvasViewport struct {
+	X    float64 `json:"x"`
+	Y    float64 `json:"y"`
+	Zoom float64 `json:"zoom"`
+}
+
 type CanvasState struct {
-	Nodes       []Node       `json:"nodes"`
-	Connections []Connection `json:"connections"`
+	Nodes       []Node          `json:"nodes"`
+	Connections []Connection    `json:"connections"`
+	Viewport    *CanvasViewport `json:"viewport,omitempty"`
 }

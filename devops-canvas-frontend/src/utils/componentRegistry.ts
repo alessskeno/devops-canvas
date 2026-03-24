@@ -200,7 +200,7 @@ export const COMPONENT_REGISTRY: ComponentDefinition[] = [
     {
         type: 'supabase',
         name: 'Supabase',
-        description: 'Supabase Auth (GoTrue) — connect to PostgreSQL on the canvas; set API URL from host port automatically',
+        description: 'Auth (GoTrue) — requires a PostgreSQL component on the canvas',
         icon: 'Shield',
         category: 'auth-security',
         color: 'text-emerald-600 bg-emerald-100 dark:text-emerald-400 dark:bg-emerald-900/30',

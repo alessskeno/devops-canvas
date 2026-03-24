@@ -16,12 +16,14 @@ import { Workspace } from '../../types';
 import { Modal } from '../shared/Modal';
 import api from '../../utils/api';
 import { generateConfig } from '../../utils/exportConfig';
+import { useDashboardWorkspaceRuntime } from '../../hooks/useDashboardWorkspaceRuntime';
 
 
 export function Dashboard() {
     const navigate = useNavigate();
     const { user, logout } = useAuthStore();
     const { workspaces, fetchWorkspaces, createWorkspace, updateWorkspace, duplicateWorkspace, deleteWorkspace, isLoading } = useWorkspaceStore();
+    const runningByWorkspaceId = useDashboardWorkspaceRuntime();
     const { isDark, toggle } = useDarkMode();
 
     // Converted to useReducer
@@ -219,6 +221,7 @@ export function Dashboard() {
                                 <WorkspaceCard
                                     key={ws.id}
                                     workspace={ws}
+                                    hasRunningContainers={Boolean(runningByWorkspaceId[ws.id])}
                                     onClick={() => navigate(`/workspace/${ws.id}`)}
                                     onEdit={() => openEditModal(ws)}
                                     onDuplicate={async () => {

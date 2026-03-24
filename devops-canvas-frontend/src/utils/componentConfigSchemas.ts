@@ -212,8 +212,8 @@ export const COMPONENT_CONFIG_SCHEMAS: Record<string, ConfigField[]> = {
         { key: 'dev_root_token', label: 'Dev Root Token', type: 'password', placeholder: 'myroot', required: true },
     ],
     'supabase': [
-        { key: 'anon_key', label: 'JWT secret (GOTRUE_JWT_SECRET)', type: 'password', helpText: 'Optional on canvas; if empty, set server env DEVOPS_CANVAS_GOTRUE_JWT_SECRET for deploy. Connect this node to PostgreSQL (required for deploy).' },
-        { key: 'service_role_key', label: 'Service role key (GOTRUE_SERVICE_ROLE_KEY)', type: 'password', helpText: 'Optional.' },
+        { key: 'anon_key', label: 'JWT secret (GOTRUE_JWT_SECRET)', type: 'password' },
+        { key: 'service_role_key', label: 'Service role key (GOTRUE_SERVICE_ROLE_KEY)', type: 'password' },
     ],
     'nats': [
         { key: 'jetstream', label: 'Enable JetStream', type: 'boolean', defaultValue: false },

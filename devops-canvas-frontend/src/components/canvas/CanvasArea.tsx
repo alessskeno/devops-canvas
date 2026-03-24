@@ -21,6 +21,7 @@ import { ContextMenu } from './ContextMenu';
 import { COMPONENT_CONFIG_SCHEMAS } from '../../utils/componentConfigSchemas';
 import { COMPONENT_REGISTRY } from '../../utils/componentRegistry';
 import { CursorOverlay } from './CursorOverlay';
+import { ViewportController } from './ViewportController';
 import { FileEditorPanel } from './FileEditorPanel';
 import { validateConnection } from '../../utils/validation';
 import { toast } from 'sonner';
@@ -85,7 +86,8 @@ export const CanvasArea = React.forwardRef<HTMLDivElement, CanvasAreaProps>(func
         removeConnection, addNode,
         contextMenu, setContextMenu,
         duplicateNode, toggleLockNode, removeNode, removeNodes,
-        setActivePanelTab, selectedNodeIds, clearSelection
+        setActivePanelTab, selectedNodeIds, clearSelection,
+        setCanvasViewport
     } = useCanvasStore();
 
     const rfNodes = useMemo(() =>
@@ -204,6 +206,13 @@ export const CanvasArea = React.forwardRef<HTMLDivElement, CanvasAreaProps>(func
         clearSelection();
     }, [clearSelection, setContextMenu]);
 
+    const handleMoveEnd = useCallback(
+        (_event: MouseEvent | TouchEvent | null, viewport: { x: number; y: number; zoom: number }) => {
+            setCanvasViewport(viewport);
+        },
+        [setCanvasViewport]
+    );
+
     const handleNodesDelete = useCallback((nodesToDelete: { id: string; locked?: boolean; data?: { locked?: boolean } }[]) => {
         const ids = nodesToDelete
             .filter((n) => !n.locked && !n.data?.locked)
@@ -248,9 +257,11 @@ export const CanvasArea = React.forwardRef<HTMLDivElement, CanvasAreaProps>(func
                 minZoom={ZOOM_MIN}
                 maxZoom={ZOOM_MAX}
                 fitView={false}
+                onMoveEnd={handleMoveEnd}
                 proOptions={{ hideAttribution: true }}
                 defaultEdgeOptions={{ type: 'custom' }}
             >
+                <ViewportController />
                 <ZoomAwareBackground />
             </ReactFlow>
 

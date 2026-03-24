@@ -25,6 +25,7 @@ import { useCanvasImport } from '../../hooks/useCanvasImport';
 import { useAutoSave } from '../../hooks/useAutoSave';
 import { useDeploymentProgress } from '../../hooks/useDeploymentProgress';
 import { useCanvasSync } from '../../hooks/useCanvasSync';
+import { useViewportPersistence } from '../../hooks/useViewportPersistence';
 import { RunningNodesProvider } from '../../contexts/RunningNodesContext';
 import { nodeEditorReducer, initialState } from './nodeEditorReducer';
 
@@ -174,6 +175,8 @@ function NodeEditorContent() {
         nodes,
         connections
     });
+
+    useViewportPersistence(workspaceId);
 
     const runningNodeIds = useMemo(() => {
         const running = new Set<string>();

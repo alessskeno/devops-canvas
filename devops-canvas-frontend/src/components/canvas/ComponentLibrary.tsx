@@ -80,7 +80,7 @@ export function ComponentLibrary() {
             </div>
 
             {/* Collapsible Category Sections */}
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto py-2 px-1">
                 {CATEGORY_SECTIONS.map((cat) => {
                     const components = groupedComponents[cat.id] || [];
                     // Hide empty categories when searching
@@ -104,12 +104,15 @@ export function ComponentLibrary() {
                                 />
                             </button>
 
-                            {/* Component List */}
+                            {/* Component List — overflow-visible when open so first row hover (border/shadow/translate) is not clipped under the header */}
                             <div
-                                className={`overflow-hidden transition-all duration-200 ease-in-out ${isCollapsed ? 'max-h-0 opacity-0' : 'max-h-[2000px] opacity-100'
-                                    }`}
+                                className={`transition-all duration-200 ease-in-out ${
+                                    isCollapsed
+                                        ? 'max-h-0 opacity-0 overflow-hidden pointer-events-none'
+                                        : 'max-h-[2000px] opacity-100 overflow-visible'
+                                }`}
                             >
-                                <div className="px-3 pb-2 space-y-1.5">
+                                <div className="px-3 pt-1 pb-2 space-y-1.5">
                                     {components.map((component) => {
                                         const CompIcon = getComponentIcon(component.type);
                                         return (

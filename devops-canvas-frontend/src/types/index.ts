@@ -44,6 +44,13 @@ export interface Connection {
     animated?: boolean;
 }
 
+/** React Flow viewport (pan + zoom), persisted with the workspace canvas. */
+export interface CanvasViewport {
+    x: number;
+    y: number;
+    zoom: number;
+}
+
 
 
 export interface AlertmanagerConfig {

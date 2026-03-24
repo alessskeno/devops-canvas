@@ -60,8 +60,36 @@ export const validateConnection = (sourceType: string, targetType: string): { va
         }
     }
 
+    // Supabase Auth (GoTrue) may only connect to PostgreSQL (either direction), matching deploy validation.
+    if (sourceType === 'supabase' && targetType !== 'postgres') {
+        return {
+            valid: false,
+            message: 'Supabase Auth must connect to a PostgreSQL component only. Add a PostgreSQL node and draw an edge to it.',
+        };
+    }
+    if (targetType === 'supabase' && sourceType !== 'postgres') {
+        return {
+            valid: false,
+            message: 'Only a PostgreSQL component may connect to Supabase Auth.',
+        };
+    }
+
     return { valid: true };
 };
+
+/** True if this node shares an edge with at least one `postgres` node (used for Supabase requirement UI). */
+export function nodeHasPostgresNeighbor(
+    nodeId: string,
+    connections: { source: string; target: string }[],
+    nodes: { id: string; type: string }[]
+): boolean {
+    const neighborIds = new Set<string>();
+    for (const c of connections) {
+        if (c.source === nodeId) neighborIds.add(c.target);
+        else if (c.target === nodeId) neighborIds.add(c.source);
+    }
+    return nodes.some((n) => neighborIds.has(n.id) && n.type === 'postgres');
+}
 
 // Helper to get readable name
 const getLabel = (type: string) => {

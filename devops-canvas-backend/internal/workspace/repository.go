@@ -2,6 +2,8 @@ package workspace
 
 import (
 	"context"
+	"encoding/json"
+
 	"devops-canvas-backend/internal/db"
 	"devops-canvas-backend/internal/models"
 )
@@ -299,7 +301,10 @@ func (r *Repository) DuplicateWorkspace(ctx context.Context, sourceID, newName, 
 	return &ws, nil
 }
 
-func (r *Repository) SaveCanvas(ctx context.Context, workspaceID string, userID string, nodes []models.Node, connections []models.Connection) error {
+func (r *Repository) SaveCanvas(ctx context.Context, workspaceID string, userID string, state models.CanvasState) error {
+	nodes := state.Nodes
+	connections := state.Connections
+
 	tx, err := db.Pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -378,13 +383,46 @@ func (r *Repository) SaveCanvas(ctx context.Context, workspaceID string, userID 
 		}
 	}
 
-	// 3. Update workspace updated_at and last_updated_by
-	_, err = tx.Exec(ctx, "UPDATE workspaces SET updated_at = NOW(), last_updated_by = $2 WHERE id = $1", workspaceID, userID)
+	// 3. Update workspace metadata (and optional canvas viewport in config_json)
+	if state.Viewport != nil {
+		vpJSON, jerr := json.Marshal(state.Viewport)
+		if jerr != nil {
+			return jerr
+		}
+		_, err = tx.Exec(ctx, `
+			UPDATE workspaces SET
+				config_json = jsonb_set(COALESCE(config_json, '{}'::jsonb), '{canvasViewport}', $2::jsonb, true),
+				updated_at = NOW(),
+				last_updated_by = $3
+			WHERE id = $1
+		`, workspaceID, vpJSON, userID)
+	} else {
+		_, err = tx.Exec(ctx, "UPDATE workspaces SET updated_at = NOW(), last_updated_by = $2 WHERE id = $1", workspaceID, userID)
+	}
 	if err != nil {
 		return err
 	}
 
 	return tx.Commit(ctx)
+}
+
+// SaveCanvasViewport updates only config_json.canvasViewport (pan/zoom) without touching nodes or connections.
+func (r *Repository) SaveCanvasViewport(ctx context.Context, workspaceID string, userID string, vp *models.CanvasViewport) error {
+	if vp == nil {
+		return nil
+	}
+	vpJSON, err := json.Marshal(vp)
+	if err != nil {
+		return err
+	}
+	_, err = db.Pool.Exec(ctx, `
+		UPDATE workspaces SET
+			config_json = jsonb_set(COALESCE(config_json, '{}'::jsonb), '{canvasViewport}', $2::jsonb, true),
+			updated_at = NOW(),
+			last_updated_by = $3
+		WHERE id = $1
+	`, workspaceID, vpJSON, userID)
+	return err
 }
 
 func (r *Repository) GetCanvas(ctx context.Context, workspaceID string) (*models.CanvasState, error) {
@@ -421,6 +459,16 @@ func (r *Repository) GetCanvas(ctx context.Context, workspaceID string) (*models
 			return nil, err
 		}
 		state.Connections = append(state.Connections, c)
+	}
+
+	var configJSON []byte
+	if err := db.Pool.QueryRow(ctx, "SELECT COALESCE(config_json, '{}'::jsonb) FROM workspaces WHERE id = $1", workspaceID).Scan(&configJSON); err == nil && len(configJSON) > 0 {
+		var cfg struct {
+			CanvasViewport *models.CanvasViewport `json:"canvasViewport"`
+		}
+		if err := json.Unmarshal(configJSON, &cfg); err == nil && cfg.CanvasViewport != nil {
+			state.Viewport = cfg.CanvasViewport
+		}
 	}
 
 	return state, nil

@@ -7,6 +7,8 @@ import { getComponentIcon } from '../../utils/componentIcons';
 
 interface WorkspaceCardProps {
     workspace: Workspace;
+    /** True when this workspace has at least one running Docker container (from realtime stats). */
+    hasRunningContainers?: boolean;
     onClick: () => void;
     onDelete: () => void;
     onEdit: () => void;
@@ -16,7 +18,17 @@ interface WorkspaceCardProps {
     highlight?: string;
 }
 
-export function WorkspaceCard({ workspace, onClick, onDelete, onEdit, onDuplicate, onShare, onExport, highlight = '' }: WorkspaceCardProps) {
+export function WorkspaceCard({
+    workspace,
+    hasRunningContainers = false,
+    onClick,
+    onDelete,
+    onEdit,
+    onDuplicate,
+    onShare,
+    onExport,
+    highlight = '',
+}: WorkspaceCardProps) {
     const [isMenuOpen, setIsMenuOpen] = React.useState(false);
     const menuRef = React.useRef<HTMLDivElement>(null);
 
@@ -81,11 +93,15 @@ export function WorkspaceCard({ workspace, onClick, onDelete, onEdit, onDuplicat
         >
             <div className="flex justify-between items-start mb-4">
                 <div className="flex items-center space-x-2 mb-2">
-                    {/* Status Badge */}
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-                        ${workspace.environment === 'development' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-400'}
-                    `}>
-                        {workspace.environment === 'development' ? 'Running' : 'Stopped'}
+                    {/* Deploy runtime (containers), not environment */}
+                    <span
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            hasRunningContainers
+                                ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                        }`}
+                    >
+                        {hasRunningContainers ? 'Running' : 'Ready'}
                     </span>
 
                     {/* Environment Badge */}

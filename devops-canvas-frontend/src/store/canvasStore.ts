@@ -1,7 +1,9 @@
 import { create } from 'zustand';
-import { CanvasNode, Connection, ComponentConfig } from '../types';
+import { CanvasNode, Connection, ComponentConfig, CanvasViewport } from '../types';
 import { COMPONENT_CONFIG_SCHEMAS } from '../utils/componentConfigSchemas';
 import type { NodeChange } from '@xyflow/react';
+import api from '../utils/api';
+import { viewportsCloseEnough } from '../utils/viewport';
 
 const cleanupNodeConnection = (node: CanvasNode, detachedNodeId: string): CanvasNode => {
     const schema = COMPONENT_CONFIG_SCHEMAS[node.type];
@@ -84,6 +86,15 @@ interface CanvasState {
     // Persistence
     isLoading: boolean;
     isSaving: boolean;
+    /** Last known pan/zoom; restored after load and updated on pan/zoom */
+    canvasViewport: CanvasViewport | null;
+    /** Last viewport known to match the server (PATCH or full save); avoids redundant viewport writes */
+    persistedViewport: CanvasViewport | null;
+    /** Incremented when canvas is loaded from API or replaced (import); triggers viewport restore */
+    canvasHydrationId: number;
+    setCanvasViewport: (viewport: CanvasViewport | null) => void;
+    /** Debounced caller: PATCH viewport only; does not affect unsaved/dirty state */
+    persistViewportToServer: (workspaceId: string) => Promise<void>;
     fetchCanvas: (workspaceId: string) => Promise<void>;
     saveCanvas: (workspaceId: string) => Promise<void>;
 }
@@ -334,7 +345,17 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         };
     }),
 
-    loadCanvas: (nodes, connections) => set({ nodes, connections, past: [], future: [], selectedNodeIds: [] }),
+    loadCanvas: (nodes, connections) =>
+        set((state) => ({
+            nodes,
+            connections,
+            past: [],
+            future: [],
+            selectedNodeIds: [],
+            canvasViewport: null,
+            persistedViewport: null,
+            canvasHydrationId: state.canvasHydrationId + 1,
+        })),
 
     applyRemoteUpdate: (remoteNodes, remoteConnections) => set((state) => {
         const remoteNodeMap = new Map(remoteNodes.map(n => [n.id, n]));
@@ -386,14 +407,31 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
 
     isLoading: false,
     isSaving: false,
+    canvasViewport: null,
+    persistedViewport: null,
+    canvasHydrationId: 0,
+
+    setCanvasViewport: (viewport) => set({ canvasViewport: viewport }),
+
+    persistViewportToServer: async (workspaceId: string) => {
+        const { canvasViewport, persistedViewport } = get();
+        if (!canvasViewport || viewportsCloseEnough(canvasViewport, persistedViewport)) {
+            return;
+        }
+        try {
+            await api.patch(`/workspaces/${workspaceId}/canvas/viewport`, canvasViewport);
+            set({ persistedViewport: { ...canvasViewport } });
+        } catch (e) {
+            console.error('Failed to persist canvas viewport:', e);
+        }
+    },
 
     fetchCanvas: async (workspaceId: string) => {
         set({ isLoading: true });
         try {
-            const { default: api } = await import('../utils/api');
             const response = await api.get(`/workspaces/${workspaceId}/canvas`);
 
-            const { nodes, connections } = response.data;
+            const { nodes, connections, viewport: rawVp } = response.data;
 
             const mappedNodes = (nodes || []).map((n: any) => ({
                 ...n,
@@ -403,14 +441,27 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
                 }
             }));
 
-            set({
+            let viewport: CanvasViewport | null = null;
+            if (
+                rawVp &&
+                typeof rawVp.x === 'number' &&
+                typeof rawVp.y === 'number' &&
+                typeof rawVp.zoom === 'number'
+            ) {
+                viewport = { x: rawVp.x, y: rawVp.y, zoom: rawVp.zoom };
+            }
+
+            set((state) => ({
                 nodes: mappedNodes,
                 connections: connections || [],
                 past: [],
                 future: [],
                 selectedNodeIds: [],
-                isLoading: false
-            });
+                canvasViewport: viewport,
+                persistedViewport: viewport,
+                canvasHydrationId: state.canvasHydrationId + 1,
+                isLoading: false,
+            }));
         } catch (error) {
             console.error('Failed to fetch canvas:', error);
             set({ isLoading: false });
@@ -421,7 +472,6 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
         set({ isSaving: true });
         try {
             const { nodes, connections } = get();
-            const { default: api } = await import('../utils/api');
 
             const payloadNodes = nodes.map(n => {
                 const { measured, selected, ...rest } = n as any;
@@ -432,11 +482,17 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
                 };
             });
 
+            const { canvasViewport } = get();
             await api.put(`/workspaces/${workspaceId}/canvas`, {
                 nodes: payloadNodes,
-                connections
+                connections,
+                ...(canvasViewport ? { viewport: canvasViewport } : {}),
             });
-            set({ isSaving: false });
+            const vp = get().canvasViewport;
+            set({
+                isSaving: false,
+                persistedViewport: vp ? { ...vp } : null,
+            });
         } catch (error) {
             console.error('Failed to save canvas:', error);
             set({ isSaving: false });

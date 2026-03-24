@@ -1,140 +1,141 @@
 package workspace
 
 import (
-    "encoding/json"
-    "net/http"
-    "strings"
-    "log"
-    "context"
-    "github.com/go-chi/chi/v5"
-    "devops-canvas-backend/internal/auth"
-    "devops-canvas-backend/internal/models"
+	"context"
+	"devops-canvas-backend/internal/auth"
+	"devops-canvas-backend/internal/models"
+	"encoding/json"
+	"github.com/go-chi/chi/v5"
+	"log"
+	"net/http"
+	"strings"
 )
 
 // DeploymentService defines the methods required from the deploy package
 // locally to avoid circular dependencies (deploy -> workspace -> deploy)
 type DeploymentService interface {
-    TeardownWorkspace(ctx context.Context, workspaceID string) error
+	TeardownWorkspace(ctx context.Context, workspaceID string) error
 }
 
 type Handler struct {
-    svc       *Service
-    authSvc   *auth.Service
-    deploySvc DeploymentService
+	svc       *Service
+	authSvc   *auth.Service
+	deploySvc DeploymentService
 }
 
 func NewHandler(svc *Service, authSvc *auth.Service, deploySvc DeploymentService) *Handler {
-    return &Handler{svc: svc, authSvc: authSvc, deploySvc: deploySvc}
+	return &Handler{svc: svc, authSvc: authSvc, deploySvc: deploySvc}
 }
 
 func (h *Handler) RegisterRoutes(r chi.Router) {
-    r.Route("/workspaces", func(r chi.Router) {
-        r.Get("/", h.ListWorkspaces)
-        r.Post("/", h.CreateWorkspace)
-        r.Get("/{id}", h.GetWorkspace)
-        r.Put("/{id}", h.UpdateWorkspace)
-//        r.Put("/{id}", h.UpdateWorkspace) // Duplicate removed
-        r.Post("/{id}/duplicate", h.DuplicateWorkspace)
-        r.Delete("/{id}", h.DeleteWorkspace)
-        r.Get("/{id}/canvas", h.GetCanvas)
-        r.Put("/{id}/canvas", h.SaveCanvas)
-    })
+	r.Route("/workspaces", func(r chi.Router) {
+		r.Get("/", h.ListWorkspaces)
+		r.Post("/", h.CreateWorkspace)
+		r.Get("/{id}", h.GetWorkspace)
+		r.Put("/{id}", h.UpdateWorkspace)
+		//        r.Put("/{id}", h.UpdateWorkspace) // Duplicate removed
+		r.Post("/{id}/duplicate", h.DuplicateWorkspace)
+		r.Delete("/{id}", h.DeleteWorkspace)
+		r.Get("/{id}/canvas", h.GetCanvas)
+		r.Put("/{id}/canvas", h.SaveCanvas)
+		r.Patch("/{id}/canvas/viewport", h.SaveCanvasViewport)
+	})
 }
 
 func (h *Handler) DuplicateWorkspace(w http.ResponseWriter, r *http.Request) {
-    userID, err := h.getUserId(r)
-    if err != nil {
-        h.respondError(w, http.StatusUnauthorized, "Unauthorized")
-        return
-    }
+	userID, err := h.getUserId(r)
+	if err != nil {
+		h.respondError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
 
-    // 1. Check Global Permission to Create (Owner/Admin/Editor)
-    if err := h.authSvc.CheckRole(r.Context(), userID, "Owner", "Admin", "Editor"); err != nil {
-        h.respondError(w, http.StatusForbidden, "Insufficient global permissions to create workspaces")
-        return
-    }
+	// 1. Check Global Permission to Create (Owner/Admin/Editor)
+	if err := h.authSvc.CheckRole(r.Context(), userID, "Owner", "Admin", "Editor"); err != nil {
+		h.respondError(w, http.StatusForbidden, "Insufficient global permissions to create workspaces")
+		return
+	}
 
-    workspaceID := chi.URLParam(r, "id")
+	workspaceID := chi.URLParam(r, "id")
 
-    // 2. Check Read Access to Source Workspace
-    sourceWs, err := h.svc.GetWorkspace(r.Context(), workspaceID)
-    if err != nil {
-        h.respondError(w, http.StatusNotFound, "Source workspace not found")
-        return
-    }
+	// 2. Check Read Access to Source Workspace
+	sourceWs, err := h.svc.GetWorkspace(r.Context(), workspaceID)
+	if err != nil {
+		h.respondError(w, http.StatusNotFound, "Source workspace not found")
+		return
+	}
 
-    canRead := false
-    // Global Admin can always read
-    if err := h.authSvc.CheckRole(r.Context(), userID, "Admin"); err == nil {
-        canRead = true
-    }
-    
-    if !canRead {
-        if sourceWs.Visibility == "public" || sourceWs.Visibility == "team" {
-            canRead = true
-        } else {
-             // Check membership
-             _, err := h.svc.GetMemberRole(r.Context(), workspaceID, userID)
-             if err == nil {
-                 canRead = true
-             }
-        }
-    }
+	canRead := false
+	// Global Admin can always read
+	if err := h.authSvc.CheckRole(r.Context(), userID, "Admin"); err == nil {
+		canRead = true
+	}
 
-    if !canRead {
-        h.respondError(w, http.StatusForbidden, "Insufficient permissions to access source workspace")
-        return 
-    }
+	if !canRead {
+		if sourceWs.Visibility == "public" || sourceWs.Visibility == "team" {
+			canRead = true
+		} else {
+			// Check membership
+			_, err := h.svc.GetMemberRole(r.Context(), workspaceID, userID)
+			if err == nil {
+				canRead = true
+			}
+		}
+	}
 
-    ws, err := h.svc.DuplicateWorkspace(r.Context(), workspaceID, userID)
-    if err != nil {
-        h.respondError(w, http.StatusInternalServerError, "Failed to duplicate workspace: "+err.Error())
-        return
-    }
+	if !canRead {
+		h.respondError(w, http.StatusForbidden, "Insufficient permissions to access source workspace")
+		return
+	}
 
-    w.WriteHeader(http.StatusOK)
-    json.NewEncoder(w).Encode(ws)
+	ws, err := h.svc.DuplicateWorkspace(r.Context(), workspaceID, userID)
+	if err != nil {
+		h.respondError(w, http.StatusInternalServerError, "Failed to duplicate workspace: "+err.Error())
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(ws)
 }
 
 func (h *Handler) GetWorkspace(w http.ResponseWriter, r *http.Request) {
-    userID, err := h.getUserId(r)
-    if err != nil {
-        h.respondError(w, http.StatusUnauthorized, "Unauthorized")
-        return
-    }
+	userID, err := h.getUserId(r)
+	if err != nil {
+		h.respondError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
 
-    workspaceID := chi.URLParam(r, "id")
+	workspaceID := chi.URLParam(r, "id")
 
-    ws, err := h.svc.GetWorkspace(r.Context(), workspaceID)
-    if err != nil {
-        h.respondError(w, http.StatusNotFound, "Workspace not found")
-        return
-    }
+	ws, err := h.svc.GetWorkspace(r.Context(), workspaceID)
+	if err != nil {
+		h.respondError(w, http.StatusNotFound, "Workspace not found")
+		return
+	}
 
-    canRead := false
-    // Global Admin can always read
-    if err := h.authSvc.CheckRole(r.Context(), userID, "Admin"); err == nil {
-        canRead = true
-    }
-    
-    if !canRead {
-        if ws.Visibility == "public" || ws.Visibility == "team" {
-            canRead = true
-        } else {
-             // Check membership
-             _, err := h.svc.GetMemberRole(r.Context(), workspaceID, userID)
-             if err == nil {
-                 canRead = true
-             }
-        }
-    }
+	canRead := false
+	// Global Admin can always read
+	if err := h.authSvc.CheckRole(r.Context(), userID, "Admin"); err == nil {
+		canRead = true
+	}
 
-    if !canRead {
-        h.respondError(w, http.StatusForbidden, "Insufficient permissions to view this workspace")
-        return 
-    }
+	if !canRead {
+		if ws.Visibility == "public" || ws.Visibility == "team" {
+			canRead = true
+		} else {
+			// Check membership
+			_, err := h.svc.GetMemberRole(r.Context(), workspaceID, userID)
+			if err == nil {
+				canRead = true
+			}
+		}
+	}
 
-    json.NewEncoder(w).Encode(ws)
+	if !canRead {
+		h.respondError(w, http.StatusForbidden, "Insufficient permissions to view this workspace")
+		return
+	}
+
+	json.NewEncoder(w).Encode(ws)
 }
 
 func (h *Handler) ListWorkspaces(w http.ResponseWriter, r *http.Request) {
@@ -144,12 +145,12 @@ func (h *Handler) ListWorkspaces(w http.ResponseWriter, r *http.Request) {
 		h.respondError(w, http.StatusUnauthorized, "Unauthorized")
 		return
 	}
-	
+
 	list, err := h.svc.ListWorkspaces(r.Context(), userID)
-    if err != nil {
-        h.respondError(w, http.StatusInternalServerError, err.Error())
-        return
-    }
+	if err != nil {
+		h.respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 
 	json.NewEncoder(w).Encode(list)
 }
@@ -237,148 +238,174 @@ func (h *Handler) UpdateWorkspace(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) DeleteWorkspace(w http.ResponseWriter, r *http.Request) {
-    userID, err := h.getUserId(r)
-    if err != nil {
-        h.respondError(w, http.StatusUnauthorized, "Unauthorized")
-        return
-    }
+	userID, err := h.getUserId(r)
+	if err != nil {
+		h.respondError(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
 
-    workspaceID := chi.URLParam(r, "id")
-    isAllowed := false
+	workspaceID := chi.URLParam(r, "id")
+	isAllowed := false
 
-    // 1. Global Admin can delete any workspace
-    if err := h.authSvc.CheckRole(r.Context(), userID, "Admin"); err == nil {
-        isAllowed = true
-    }
+	// 1. Global Admin can delete any workspace
+	if err := h.authSvc.CheckRole(r.Context(), userID, "Admin"); err == nil {
+		isAllowed = true
+	}
 
-    if !isAllowed {
-        // 2. Check Workspace Membership Role (Owner or Admin of the workspace)
-        role, err := h.svc.GetMemberRole(r.Context(), workspaceID, userID)
-        if err == nil {
-            roleLower := strings.ToLower(role)
-            if roleLower == "owner" || roleLower == "admin" {
-                isAllowed = true
-            }
-        }
-    }
+	if !isAllowed {
+		// 2. Check Workspace Membership Role (Owner or Admin of the workspace)
+		role, err := h.svc.GetMemberRole(r.Context(), workspaceID, userID)
+		if err == nil {
+			roleLower := strings.ToLower(role)
+			if roleLower == "owner" || roleLower == "admin" {
+				isAllowed = true
+			}
+		}
+	}
 
-    if !isAllowed {
-        // Fallback: Check if user is the direct owner in the workspaces table (if not covered by member role?)
-        // Usually creation sets member role to owner, but let's be safe or just rely on member role.
-        // If member role check failed (e.g. not a member), then they definitely can't delete unless global admin.
-        h.respondError(w, http.StatusForbidden, "Insufficient permissions: Only Global Admins or Workspace Owners/Admins can delete workspaces")
-        return
-    }
+	if !isAllowed {
+		// Fallback: Check if user is the direct owner in the workspaces table (if not covered by member role?)
+		// Usually creation sets member role to owner, but let's be safe or just rely on member role.
+		// If member role check failed (e.g. not a member), then they definitely can't delete unless global admin.
+		h.respondError(w, http.StatusForbidden, "Insufficient permissions: Only Global Admins or Workspace Owners/Admins can delete workspaces")
+		return
+	}
 
-    // 3. Teardown Resources (Best Effort)
-    // We log errors but proceed with deletion to prevent orphaned database records.
-    if h.deploySvc != nil {
-        if err := h.deploySvc.TeardownWorkspace(r.Context(), workspaceID); err != nil {
-            log.Printf("Failed to teardown workspace resources for %s: %v", workspaceID, err)
-        }
-    }
+	// 3. Teardown Resources (Best Effort)
+	// We log errors but proceed with deletion to prevent orphaned database records.
+	if h.deploySvc != nil {
+		if err := h.deploySvc.TeardownWorkspace(r.Context(), workspaceID); err != nil {
+			log.Printf("Failed to teardown workspace resources for %s: %v", workspaceID, err)
+		}
+	}
 
-    if err := h.svc.DeleteWorkspace(r.Context(), workspaceID); err != nil {
-        h.respondError(w, http.StatusInternalServerError, "Failed to delete workspace: "+err.Error())
-        return
-    }
+	if err := h.svc.DeleteWorkspace(r.Context(), workspaceID); err != nil {
+		h.respondError(w, http.StatusInternalServerError, "Failed to delete workspace: "+err.Error())
+		return
+	}
 
-    w.WriteHeader(http.StatusOK)
-    json.NewEncoder(w).Encode(map[string]string{"message": "Workspace and associated resources deleted"})
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"message": "Workspace and associated resources deleted"})
 }
 
 func (h *Handler) getUserId(r *http.Request) (string, error) {
-    tokenString := r.Header.Get("Authorization")
-    if len(tokenString) > 7 && tokenString[:7] == "Bearer " {
-        tokenString = tokenString[7:]
-    }
-    return h.authSvc.ParseToken(tokenString)
+	tokenString := r.Header.Get("Authorization")
+	if len(tokenString) > 7 && tokenString[:7] == "Bearer " {
+		tokenString = tokenString[7:]
+	}
+	return h.authSvc.ParseToken(tokenString)
 }
 
 func (h *Handler) respondError(w http.ResponseWriter, code int, message string) {
-    w.Header().Set("Content-Type", "application/json")
-    w.WriteHeader(code)
-    json.NewEncoder(w).Encode(map[string]string{
-        "message": message,
-        "code":    http.StatusText(code),
-    })
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": message,
+		"code":    http.StatusText(code),
+	})
 }
 
 func (h *Handler) GetCanvas(w http.ResponseWriter, r *http.Request) {
-    id := chi.URLParam(r, "id")
-    // Permission check: Viewer can see? Yes.
-    // TODO: Verify user access to workspace explicitly if not covered by route middleware or simple ownership checks yet
-    
-    canvas, err := h.svc.GetCanvas(r.Context(), id)
-    if err != nil {
-        h.respondError(w, http.StatusInternalServerError, err.Error())
-        return
-    }
-    
-    json.NewEncoder(w).Encode(canvas)
+	id := chi.URLParam(r, "id")
+	// Permission check: Viewer can see? Yes.
+	// TODO: Verify user access to workspace explicitly if not covered by route middleware or simple ownership checks yet
+
+	canvas, err := h.svc.GetCanvas(r.Context(), id)
+	if err != nil {
+		h.respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	json.NewEncoder(w).Encode(canvas)
+}
+
+// authorizeCanvasWrite checks the same rules as saving the canvas (nodes or viewport).
+func (h *Handler) authorizeCanvasWrite(w http.ResponseWriter, r *http.Request, workspaceID string) (userID string, ok bool) {
+	userID, err := h.getUserId(r)
+	if err != nil {
+		h.respondError(w, http.StatusUnauthorized, "Unauthorized")
+		return "", false
+	}
+
+	isAllowed := false
+	if err := h.authSvc.CheckRole(r.Context(), userID, "Admin"); err == nil {
+		isAllowed = true
+	}
+
+	if !isAllowed {
+		ws, err := h.svc.GetWorkspace(r.Context(), workspaceID)
+		if err != nil {
+			h.respondError(w, http.StatusNotFound, "Workspace not found")
+			return "", false
+		}
+		if ws.Visibility == "public" || ws.Visibility == "team" {
+			if err := h.authSvc.CheckRole(r.Context(), userID, "Editor", "Owner"); err == nil {
+				isAllowed = true
+			}
+		}
+	}
+
+	if !isAllowed {
+		role, err := h.svc.GetMemberRole(r.Context(), workspaceID, userID)
+		if err == nil {
+			roleLower := strings.ToLower(role)
+			if roleLower == "owner" || roleLower == "editor" || roleLower == "admin" {
+				isAllowed = true
+			}
+		}
+	}
+
+	if !isAllowed {
+		h.respondError(w, http.StatusForbidden, "Access denied: Insufficient permissions to save this workspace")
+		return "", false
+	}
+	return userID, true
 }
 
 func (h *Handler) SaveCanvas(w http.ResponseWriter, r *http.Request) {
-    id := chi.URLParam(r, "id")
-    userID, err := h.getUserId(r)
-    if err != nil {
-        h.respondError(w, http.StatusUnauthorized, "Unauthorized")
-        return
-    }
+	id := chi.URLParam(r, "id")
+	userID, ok := h.authorizeCanvasWrite(w, r, id)
+	if !ok {
+		return
+	}
 
-    // Permission Check
-    // Permission Check
-    isAllowed := false
+	var state models.CanvasState
+	if err := json.NewDecoder(r.Body).Decode(&state); err != nil {
+		h.respondError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
 
-    // 1. Global Admin can always save
-    if err := h.authSvc.CheckRole(r.Context(), userID, "Admin"); err == nil {
-        isAllowed = true
-    }
+	if err := h.svc.SaveCanvas(r.Context(), id, userID, state); err != nil {
+		h.respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 
-    if !isAllowed {
-        // 2. Check Workspace Visibility and Global Permissions
-        // We need to fetch workspace metadata first
-        ws, err := h.svc.GetWorkspace(r.Context(), id)
-        if err != nil {
-            h.respondError(w, http.StatusNotFound, "Workspace not found")
-            return
-        }
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": "saved"})
+}
 
-        // If Public or Team, allow Editors
-        if ws.Visibility == "public" || ws.Visibility == "team" {
-             if err := h.authSvc.CheckRole(r.Context(), userID, "Editor", "Owner"); err == nil {
-                 isAllowed = true
-             }
-        }
-    }
+func (h *Handler) SaveCanvasViewport(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	userID, ok := h.authorizeCanvasWrite(w, r, id)
+	if !ok {
+		return
+	}
 
-    if !isAllowed {
-        // 3. Workspace Member Check (Private workspaces or Viewers)
-        role, err := h.svc.GetMemberRole(r.Context(), id, userID)
-        if err == nil {
-            roleLower := strings.ToLower(role)
-            if roleLower == "owner" || roleLower == "editor" || roleLower == "admin" {
-                 isAllowed = true
-            }
-        }
-    }
-    
-    if !isAllowed {
-         h.respondError(w, http.StatusForbidden, "Access denied: Insufficient permissions to save this workspace")
-         return
-    }
+	var vp models.CanvasViewport
+	if err := json.NewDecoder(r.Body).Decode(&vp); err != nil {
+		h.respondError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	if vp.Zoom <= 0 || vp.Zoom > 64 {
+		h.respondError(w, http.StatusBadRequest, "Invalid viewport zoom")
+		return
+	}
 
-    var state models.CanvasState
-    if err := json.NewDecoder(r.Body).Decode(&state); err != nil {
-        h.respondError(w, http.StatusBadRequest, "Invalid request body")
-        return
-    }
+	if err := h.svc.SaveCanvasViewport(r.Context(), id, userID, &vp); err != nil {
+		h.respondError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 
-    if err := h.svc.SaveCanvas(r.Context(), id, userID, state); err != nil {
-        h.respondError(w, http.StatusInternalServerError, err.Error())
-        return
-    }
-
-    w.WriteHeader(http.StatusOK)
-    json.NewEncoder(w).Encode(map[string]string{"status": "saved"})
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": "saved"})
 }

@@ -65,7 +65,7 @@ export function useCanvasSync({
         if (n && c) {
             isRemoteUpdate.current = true;
             applyRemoteUpdate(n, c);
-            savedStateRef.current = serializeState(n, c);
+            savedStateRef.current = serializeState(n, c); // viewport unchanged in payload
             dispatch({ type: 'SET_HAS_UNSAVED_CHANGES', payload: false });
             setTimeout(() => {
                 isRemoteUpdate.current = false;

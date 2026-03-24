@@ -5,9 +5,10 @@ import { Button } from '../shared/Button';
 import { Input } from '../shared/Input';
 import { Select } from '../shared/Select';
 import { Toggle } from '../shared/Toggle';
-import { X, Trash2, Copy, ChevronDown, ChevronRight, Settings, Server, Key, Wrench } from 'lucide-react';
+import { X, Trash2, Copy, ChevronDown, ChevronRight, Settings, Server, Key, Wrench, Database } from 'lucide-react';
 import { COMPONENT_REGISTRY } from '../../utils/componentRegistry';
 import { COMPONENT_CONFIG_SCHEMAS, ConfigField } from '../../utils/componentConfigSchemas';
+import { nodeHasPostgresNeighbor } from '../../utils/validation';
 
 import { AlertmanagerConfigForm } from './AlertmanagerConfigForm';
 import { ConfigFieldRenderer } from './ConfigFieldRenderer';
@@ -228,8 +229,33 @@ export function ConfigPanel() {
 
                 {/* Content Area - same surface as component list panel */}
                 <div className="flex-1 overflow-y-auto p-5 space-y-6 bg-white dark:bg-slate-900">
+                    {selectedNode.type === 'supabase' &&
+                        !nodeHasPostgresNeighbor(selectedNode.id, connections, nodes) && (
+                            <div
+                                className="-mt-1 mb-1 rounded-lg border border-amber-200 dark:border-amber-800/80 bg-amber-50/90 dark:bg-amber-950/35 px-3 py-2.5 flex gap-2.5 text-xs text-amber-950 dark:text-amber-100"
+                                role="status"
+                            >
+                                <Database className="shrink-0 w-4 h-4 mt-0.5 opacity-90" aria-hidden />
+                                <div>
+                                    <p className="font-semibold text-amber-950 dark:text-amber-50">PostgreSQL required</p>
+                                    <p className="mt-0.5 text-amber-900/90 dark:text-amber-200/90 leading-relaxed">
+                                        Connect this node to exactly one <strong>PostgreSQL</strong> component on the canvas
+                                        (edge in either direction). Deploy stays blocked until that link exists.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
                     {currentTab === 'General' && (
                         <div className="space-y-6">
+                            <section className="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-slate-800">
+                                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Enabled</span>
+                                <Toggle
+                                    checked={selectedNode.data.enabled !== false}
+                                    onChange={v => handleChange('enabled', v)}
+                                    disabled={isLocked}
+                                />
+                            </section>
+
                             <section>
                                 <Input
                                     label="Service name"
@@ -290,15 +316,6 @@ export function ConfigPanel() {
                                     value={selectedNode.data.command ?? ''}
                                     placeholder="Override the default container command"
                                     onChange={e => handleChange('command', e.target.value)}
-                                    disabled={isLocked}
-                                />
-                            </section>
-
-                            <section className="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-slate-800">
-                                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Enabled</span>
-                                <Toggle
-                                    checked={selectedNode.data.enabled !== false}
-                                    onChange={v => handleChange('enabled', v)}
                                     disabled={isLocked}
                                 />
                             </section>
@@ -518,9 +535,11 @@ export function ConfigPanel() {
                                             </div>
                                         ));
                                     })()}
-                                    <div className="p-3 bg-blue-50 dark:bg-slate-800/80 rounded-lg border border-blue-100 dark:border-slate-700 text-xs text-blue-600 dark:text-blue-400 mt-4">
-                                        Configure parameters specific to {selectedNode.type}.
-                                    </div>
+                                    {selectedNode.type !== 'supabase' && (
+                                        <div className="p-3 bg-blue-50 dark:bg-slate-800/80 rounded-lg border border-blue-100 dark:border-slate-700 text-xs text-blue-600 dark:text-blue-400 mt-4">
+                                            Configure parameters specific to {selectedNode.type}.
+                                        </div>
+                                    )}
                                 </div>
                             ) : (
                                 <div className="p-3 bg-gray-50 dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 text-xs text-slate-500 dark:text-gray-500 text-center italic">
