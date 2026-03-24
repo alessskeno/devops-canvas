@@ -65,24 +65,22 @@ The API is also on **port 8080** if you need it (for example health checks at `/
 
 ## Open the app from another computer (VM, bastion, LAN)
 
-If Compose runs on a server (for example `10.0.211.3`) and you use a browser on your **Windows PC** or laptop, use the server’s address, not `localhost`:
+If Compose runs on a server (for example `192.168.0.106`) and you use a browser on your **Windows PC** or laptop, use the server’s address, not `localhost`:
 
-- **http://10.0.211.3:3000** (replace with your real IP or DNS name)
+- **http://192.168.0.106:3000** (replace with your real IP or DNS name)
 
 The UI talks to the API **through the same address** (Nginx in the UI container forwards `/api` to the backend). You do not need to point the browser at `localhost:8080` on your PC.
 
 **Checklist**
 
 1. **Firewall / security group** on the server: allow inbound **TCP 3000** (and **8080** only if you want direct API access from outside).
-2. **Team invite links** — the link in the email field is built from **`APP_BASE_URL`** in `.env`. If people open the app as `http://10.0.211.3:3000`, set:
+2. **Team invite links** — the link in the email field is built from **`APP_BASE_URL`** in `.env`. If people open the app as `http://192.168.0.106:3000`, set:
 
    ```env
-   APP_BASE_URL=http://10.0.211.3:3000
+   APP_BASE_URL=http://192.168.0.106:3000
    ```
 
    No trailing slash. Restart Compose after changing it.
-
-3. **HTTPS** — if you put a reverse proxy or load balancer in front with TLS, set `APP_BASE_URL` to that public URL (for example `https://canvas.mycompany.com`).
 
 ---
 
@@ -113,17 +111,6 @@ More options are described in [`.env.example`](.env.example).
 - [`devops-canvas-backend/`](devops-canvas-backend/) — API and deployment logic  
 - [`devops-canvas-frontend/`](devops-canvas-frontend/) — Web UI  
 - [`docker-compose.yml`](docker-compose.yml) — how the services are wired  
-
----
-
-## Scripts and publishing
-
-| | |
-|--|--|
-| [`scripts/audit-repo-secrets.sh`](scripts/audit-repo-secrets.sh) | Quick scan for common secret patterns in tracked files |
-| [`scripts/smoke-containers.sh`](scripts/smoke-containers.sh) | Optional smoke checks against running containers |
-
-Before publishing: run the audit script, keep `.env` out of git, and store production secrets in your platform’s secret store—not in committed files. CI: [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
 ---
 
