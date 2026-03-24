@@ -18,6 +18,9 @@ build
 # Local agent / skill bundles (not application code; large third-party trees)
 .agent/
 
+# GitHub Actions (keep local only if you use them; not part of the distributed app tree)
+.github/workflows/
+
 # Never commit raw keys or deploy dumps that may contain user secrets
 *.pem
 *.p12
@@ -50,7 +53,7 @@ devops-canvas-backend/main
 
 # IDE
 .idea
-.vscode
+.vscode/
 *.swp
 devops-canvas-backend/api
 devops-canvas-backend/saas-bin
