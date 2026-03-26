@@ -7,7 +7,7 @@ import { useAuthStore } from '../../store/authStore';
 import { WorkspaceCard } from './WorkspaceCard';
 import { config } from '../../config';
 import { Button } from '../shared/Button';
-import { Plus, Search, Sun, Moon, LogOut, User as UserIcon } from 'lucide-react';
+import { Plus, Search, Sun, Moon, LogOut, User as UserIcon, Layers } from 'lucide-react';
 import { Input } from '../shared/Input';
 import { WorkspaceModal } from './WorkspaceModal';
 import { Select } from '../shared/Select';
@@ -108,8 +108,11 @@ export function Dashboard() {
             {/* Header */}
             <header className="bg-white dark:bg-slate-900 border-b border-slate-300 dark:border-slate-800 h-16 px-6 flex items-center justify-between sticky top-0 z-10">
                 <div className="flex items-center space-x-3">
-                    <div className="bg-blue-600 p-1.5 rounded-lg">
-                        <span className="text-white font-bold text-lg leading-none">DC</span>
+                    <div
+                        className="h-9 w-9 bg-blue-600 rounded-xl flex items-center justify-center shrink-0 shadow-sm ring-1 ring-slate-200/80 dark:ring-slate-700"
+                        aria-hidden
+                    >
+                        <Layers className="text-white h-5 w-5" strokeWidth={2} />
                     </div>
                     <span className="font-bold text-lg text-slate-950 dark:text-white">DevOps Canvas</span>
                 </div>
@@ -196,9 +199,17 @@ export function Dashboard() {
             {/* Main Content */}
             <main className="max-w-7xl mx-auto p-6 md:p-8">
                 <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-8">
-                    <div>
-                        <h1 className="text-2xl font-bold text-slate-950 dark:text-white mb-1">Recent Workspaces</h1>
-                        <p className="text-slate-600 dark:text-slate-500">Manage your infrastructure environments</p>
+                    <div className="flex items-center gap-4">
+                        <div
+                            className="hidden sm:flex h-12 w-12 bg-blue-600 rounded-xl items-center justify-center shrink-0 shadow-lg"
+                            aria-hidden
+                        >
+                            <Layers className="text-white h-7 w-7" strokeWidth={2} />
+                        </div>
+                        <div>
+                            <h1 className="text-2xl font-bold text-slate-950 dark:text-white mb-1">Recent Workspaces</h1>
+                            <p className="text-slate-600 dark:text-slate-500">Manage your infrastructure environments</p>
+                        </div>
                     </div>
 
                     <div className="mt-4 md:mt-0">
