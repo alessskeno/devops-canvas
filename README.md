@@ -6,17 +6,17 @@ DevOps Canvas is a **visual infrastructure designer**: drag components onto a ca
 
 **Workspaces** — open and manage saved environments from the dashboard.
 
-![Workspaces dashboard](workspace.png)
+![Workspaces dashboard](screenshots/workspace.png)
 
 **Canvas** — compose services, connect them, and configure deployments.
 
-![Infrastructure canvas](canvas.png)
+![Infrastructure canvas](screenshots/canvas.png)
 
-![Canvas — components and connections](canvas-2.png)
+![Canvas — components and connections](screenshots/canvas-2.png)
 
 **Team** — roles, invites, and collaboration.
 
-![Team management](team-management.png)
+![Team management](screenshots/team-management.png)
 
 ---
 
@@ -108,6 +108,7 @@ More options are described in [`.env.example`](.env.example).
 
 ## Repo layout
 
+- [`screenshots/`](screenshots/) — README images (UI reference)  
 - [`devops-canvas-backend/`](devops-canvas-backend/) — API and deployment logic  
 - [`devops-canvas-frontend/`](devops-canvas-frontend/) — Web UI  
 - [`docker-compose.yml`](docker-compose.yml) — how the services are wired  
