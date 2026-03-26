@@ -117,4 +117,4 @@ More options are described in [`.env.example`](.env.example).
 
 ## License
 
-Add your license here (for example MIT or Apache-2.0).
+[Apache-2.0](LICENSE).
