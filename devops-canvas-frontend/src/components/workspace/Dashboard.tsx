@@ -16,6 +16,7 @@ import { Workspace } from '../../types';
 import { Modal } from '../shared/Modal';
 import api from '../../utils/api';
 import { generateConfig } from '../../utils/exportConfig';
+import { copyToClipboard } from '../../utils/clipboard';
 import { useDashboardWorkspaceRuntime } from '../../hooks/useDashboardWorkspaceRuntime';
 
 
@@ -71,10 +72,11 @@ export function Dashboard() {
         }
     };
 
-    const handleShare = (ws: Workspace) => {
+    const handleShare = async (ws: Workspace) => {
         const url = `${window.location.origin}/workspace/${ws.id}`;
-        navigator.clipboard.writeText(url);
-        toast.success('Workspace link copied!');
+        const ok = await copyToClipboard(url);
+        if (ok) toast.success('Workspace link copied!');
+        else toast.error('Could not copy — copy the URL from the address bar');
     };
 
     const handleExport = async (ws: Workspace) => {

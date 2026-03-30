@@ -19,6 +19,7 @@ import { useTeamStore } from '../../store/teamStore';
 import { useAuthStore } from '../../store/authStore';
 import { useWorkspaceStore } from '../../store/workspaceStore';
 import { formatRelativeTime, getDisplayInitials } from '../../utils/relativeTime';
+import { copyToClipboard } from '../../utils/clipboard';
 import { toast } from 'sonner';
 import { RoleBadge } from './RoleBadge';
 
@@ -86,10 +87,10 @@ export default function TeamLayout() {
 
     const copyInviteLink = async () => {
         if (!inviteLink) return;
-        try {
-            await navigator.clipboard.writeText(inviteLink);
+        const ok = await copyToClipboard(inviteLink);
+        if (ok) {
             toast.success('Link copied to clipboard');
-        } catch {
+        } else {
             toast.error('Could not copy — select the link and copy manually');
         }
     };

@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { useCanvasStore } from '../../store/canvasStore';
 import { generateConfig } from '../../utils/exportConfig';
 import api from '../../utils/api';
+import { copyToClipboard } from '../../utils/clipboard';
 import { useParams } from 'react-router-dom';
 
 interface ExportModalProps {
@@ -110,16 +111,18 @@ export function ExportModal({ isOpen, onClose }: ExportModalProps) {
         return '';
     };
 
-    const handleCopy = () => {
+    const handleCopy = async () => {
         const content = state.mode === 'canvas' ? configContent : getManifestContent();
-        navigator.clipboard.writeText(content);
-        toast.success('Copied!');
+        const ok = await copyToClipboard(content);
+        if (ok) toast.success('Copied!');
+        else toast.error('Could not copy — select text and copy manually');
     };
 
-    const handleShareLink = () => {
+    const handleShareLink = async () => {
         const content = state.mode === 'canvas' ? configContent : getManifestContent();
-        navigator.clipboard.writeText(content);
-        toast.success('Link copied to clipboard!');
+        const ok = await copyToClipboard(content);
+        if (ok) toast.success('Link copied to clipboard!');
+        else toast.error('Could not copy — select text and copy manually');
     };
 
     const handleDownloadFile = () => {

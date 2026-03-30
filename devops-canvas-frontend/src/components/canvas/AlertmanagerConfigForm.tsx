@@ -5,6 +5,8 @@ import { Select } from '../shared/Select';
 import { Button } from '../shared/Button';
 import { MessageSquare, Send, Copy, Eye } from 'lucide-react';
 import { generateAlertmanagerConfig } from '../../utils/alertmanagerConfig';
+import { copyToClipboard } from '../../utils/clipboard';
+import { toast } from 'sonner';
 
 interface Props {
     config: AlertmanagerConfig;
@@ -105,7 +107,11 @@ export function AlertmanagerConfigForm({ config, onChange, readOnly }: Props) {
                     </span>
                     <Button
                         size="sm"
-                        onClick={() => navigator.clipboard.writeText(generatedYaml)}
+                        onClick={async () => {
+                            const ok = await copyToClipboard(generatedYaml);
+                            if (ok) toast.success('Copied');
+                            else toast.error('Could not copy');
+                        }}
                     >
                         <Copy size={12} className="mr-1" /> Copy
                     </Button>
