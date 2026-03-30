@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { toast } from 'sonner';
 import yaml from 'js-yaml';
 import { CanvasNode, Connection } from '../types';
+import { randomUUID } from '../utils/uuid';
 
 interface UseCanvasImportProps {
     workspaceId?: string;
@@ -53,7 +54,7 @@ export function useCanvasImport({ workspaceId, loadCanvas, saveCanvas, setShowIm
 
         // 2. Process Nodes: Regenerate IDs and Sanitize
         const importedNodes = data.nodes.map((n: any) => {
-            const newId = crypto.randomUUID();
+            const newId = randomUUID();
             idMap.set(n.id, newId);
 
             return {
@@ -74,7 +75,7 @@ export function useCanvasImport({ workspaceId, loadCanvas, saveCanvas, setShowIm
             if (newSource && newTarget) {
                 acc.push({
                     ...c,
-                    id: crypto.randomUUID(),
+                    id: randomUUID(),
                     workspace_id: workspaceId || c.workspace_id,
                     source: newSource,
                     target: newTarget

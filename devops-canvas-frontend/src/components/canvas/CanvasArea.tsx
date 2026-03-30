@@ -24,6 +24,7 @@ import { CursorOverlay } from './CursorOverlay';
 import { ViewportController } from './ViewportController';
 import { FileEditorPanel } from './FileEditorPanel';
 import { validateConnection } from '../../utils/validation';
+import { randomUUID } from '../../utils/uuid';
 import { toast } from 'sonner';
 import { Layers, MousePointer2 } from 'lucide-react';
 
@@ -129,7 +130,7 @@ export const CanvasArea = React.forwardRef<HTMLDivElement, CanvasAreaProps>(func
         }
 
         addConnection({
-            id: crypto.randomUUID(),
+            id: randomUUID(),
             source: connection.source,
             target: connection.target,
             animated: true,
@@ -179,7 +180,7 @@ export const CanvasArea = React.forwardRef<HTMLDivElement, CanvasAreaProps>(func
             }
 
             const newNode: NodeType = {
-                id: crypto.randomUUID(),
+                id: randomUUID(),
                 type,
                 position,
                 data: initialData,

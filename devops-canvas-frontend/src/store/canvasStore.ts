@@ -4,6 +4,7 @@ import { COMPONENT_CONFIG_SCHEMAS } from '../utils/componentConfigSchemas';
 import type { NodeChange } from '@xyflow/react';
 import api from '../utils/api';
 import { viewportsCloseEnough } from '../utils/viewport';
+import { randomUUID } from '../utils/uuid';
 
 const cleanupNodeConnection = (node: CanvasNode, detachedNodeId: string): CanvasNode => {
     const schema = COMPONENT_CONFIG_SCHEMAS[node.type];
@@ -216,7 +217,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
             if (!nodeToDuplicate || nodeToDuplicate.locked) return;
             newNodes.push({
                 ...nodeToDuplicate,
-                id: crypto.randomUUID(),
+                id: randomUUID(),
                 position: {
                     x: nodeToDuplicate.position.x + 50,
                     y: nodeToDuplicate.position.y + 50

@@ -1,4 +1,5 @@
 import React from 'react';
+import { randomUUID } from '../../utils/uuid';
 
 interface HighlightedTextProps {
     text: string;
@@ -19,7 +20,7 @@ export const HighlightedText: React.FC<HighlightedTextProps> = ({
         }
         const regex = new RegExp(`(${highlight.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
         return text.split(regex).map(part => ({
-            id: crypto.randomUUID(),
+            id: randomUUID(),
             text: part,
             isHighlight: regex.test(part)
         }));
